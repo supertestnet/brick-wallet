@@ -65,12 +65,22 @@
             height: 2rem;
             justify-content: center;
             align-items: center;
+            -webkit-user-select: none; /* Safari */        
+            -moz-user-select: none; /* Firefox */
+            -ms-user-select: none; /* IE10+/Edge */
+            user-select: none; /* Standard */
         }
         .arrow.incoming_arrow {
             border: 1px solid green;
         }
         .arrow.outgoing_arrow {
             border: 1px solid green;
+        }
+        .tx_amt {
+            -webkit-user-select: none; /* Safari */        
+            -moz-user-select: none; /* Firefox */
+            -ms-user-select: none; /* IE10+/Edge */
+            user-select: none; /* Standard */
         }
         .history > :first-child {
             border-top: 1px solid black;
@@ -268,7 +278,7 @@
                         <div class="clickable_tx_parent" data-txid="${txid}">
                             <div class="clickable_tx ${incoming_or_outgoing}">
                                 ${arrow}
-                                <span>${Math.floor( ( tx[ "amount" ] + tx[ "fees_paid" ] ) / 1000 )} sats</span>
+                                <span class="tx_amt">${Math.floor( ( tx[ "amount" ] + tx[ "fees_paid" ] ) / 1000 )} sats</span>
                             </div>
                             <div class="hidable_tx_data ${hidden_or_shown}">
                                 <div class="tx_detail">
