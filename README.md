@@ -1,2 +1,2 @@
-# brick-wallet
+# Brick wallet
 A lightning web wallet with NWC
