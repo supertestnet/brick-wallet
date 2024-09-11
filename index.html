@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no">
+    <script src="https://supertestnet.github.io/nwcjs/nwcjs.js"></script>
+    <script src="https://bundle.run/browserify-cipher@1.0.1"></script>
+    <script src="https://bundle.run/noble-secp256k1@1.2.14"></script>
+    <script src="https://bundle.run/bech32@2.0.0"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            font-size: 1.15rem;
+            font-family: Arial, sans-serif;
+        }
+        html {
+            max-width: 800px;
+            padding: 3rem 1rem;
+            margin: auto;
+            line-height: 1.25;
+            padding: 0;
+        }
+        body {
+            margin: 3rem 1rem;
+        }
+        h1 {
+            font-size: 2rem;
+        }
+        h2 {
+            font-size: 1.5rem;
+        }
+        input {
+            line-height: 1.25;
+            width: 100%;
+            height: 1.8rem;
+            font-size: 1.15rem;
+            border: 1px solid grey;
+        }
+        .hidden {
+            display: none !important;
+        }
+        .wallet_body {
+            max-width: 15rem;
+            margin: auto;
+            word-wrap: break-word;
+        }
+        .invoice_box {
+            margin-top: 1rem;
+            border: 1px solid black;
+            color: black;
+            font-family: monospace;
+            padding: 0.5rem;
+            max-width: 15rem;
+        }
+        .hist_btns {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+        }
+        .arrow {
+            display: flex;
+            padding: .5rem;
+            border-radius: 50%;
+            width: 2rem;
+            height: 2rem;
+            justify-content: center;
+            align-items: center;
+        }
+        .arrow.incoming_arrow {
+            border: 1px solid green;
+        }
+        .arrow.outgoing_arrow {
+            border: 1px solid green;
+        }
+        .history > :first-child {
+            border-top: 1px solid black;
+        }
+        .clickable_tx {
+            border-bottom: 1px solid black;
+        }
+        .incoming_tx, .outgoing_tx {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: .5rem;
+            padding-top: .5rem;
+            cursor: pointer;
+        }
+        .incoming_tx {
+            color: green;
+        }
+        .outgoing_tx {
+            color: red;
+        }
+        .hidable_tx_data {
+            background-color: #cccccc;
+            padding: .5rem;
+            margin-bottom: .5rem;
+        }
+        .tx_detail {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: .5rem 0;
+        }
+        .tx_detail_big {
+            margin: .5rem 0;
+        }
+        @media screen and (max-width: 600px) {
+        }
+    </style>
+    <script>
+        var $ = document.querySelector.bind( document );
+        var $$ = document.querySelectorAll.bind( document );
+        var url_params = new URLSearchParams( window.location.search );
+        var url_keys = url_params.keys();
+        var $_GET = {}
+        for ( var key of url_keys ) $_GET[ key ] = url_params.get( key );
+</script>
+</head>
+<body>
+    <div class="wallet_body">
+        <center><p class="balance" style="font-weight: bold;">loading balance...</p></center></h1>
+        <center>
+            <button class="send">Send</button>
+            <button class="receive">Receive</button>
+        </center>
+        <center><div class="invoice_box hidden"></div></center>
+        <center><p style="font-weight: bold;">History</p></center>
+        <center><div class="hist_btns hidden"><button class="hist_btn hist_back"><</button><button class="hist_btn hist_fwd">></button></div></center>
+        <center><div class="history">loading history...</div></center>
+    </div>
+    <script>
+        var brick_wallet = {
+            state: {
+                // nwc_string: "nostr+walletconnect://114ae6acd58af62cb167ffc127eec8ac77a587e4297610ed59fc219bfe4c1f7a?relay=wss://nostrue.com&secret=3bf62c4b2f68d5d07339e88fba4bab8969e9b1b2273b2daf580e118aa43dbd33",
+                nwc_string: null,
+                nwc_info: null,
+                last_tx: 1,
+                offset: 0,
+                history: [],
+            },
+            loaded: false,
+            waitSomeTime: async milliseconds => new Promise( resolve => setTimeout( resolve, milliseconds ) ),
+            init: async () => {
+                if ( brick_wallet.loaded ) await brick_wallet.waitSomeTime( 3000 );
+                if ( Object.keys( brick_wallet.state.history ).length ) {
+                    $( '.hist_btns' ).classList.remove( "hidden" );
+                    var len_of_hist = Object.keys( brick_wallet.state.history ).length;
+                    if ( ( brick_wallet.state.offset + 1 ) * 5 >= len_of_hist ) $( '.hist_fwd' ).disabled = true;
+                    if ( !brick_wallet.state.offset ) $( '.hist_back' ).disabled = true;
+                    if ( brick_wallet.state.offset < 0 ) brick_wallet.state.offset = 0;
+                    $( '.hist_fwd' ).onclick = () => {
+                        if ( $( '.hist_fwd' ).disabled ) return;
+                        var len_of_hist = Object.keys( brick_wallet.state.history ).length;
+                        if ( ( brick_wallet.state.offset + 2 ) * 5 >= len_of_hist ) $( '.hist_fwd' ).disabled = true;
+                        $( '.hist_back' ).disabled = false;
+                        brick_wallet.state.offset = brick_wallet.state.offset + 1;
+                        brick_wallet.parseHistory();
+                    }
+                    $( '.hist_back' ).onclick = () => {
+                        if ( $( '.hist_back' ).disabled ) return;
+                        $( '.hist_fwd' ).disabled = false;
+                        brick_wallet.state.offset = brick_wallet.state.offset - 1;
+                        if ( brick_wallet.state.offset < 0 ) brick_wallet.state.offset = 0;
+                        if ( !brick_wallet.state.offset ) $( '.hist_back' ).disabled = true;
+                        brick_wallet.parseHistory();
+                    }
+                    brick_wallet.parseHistory();
+                } else {
+                    if ( brick_wallet.loaded ) $( '.history' ).innerText = 'No history';
+                }
+                brick_wallet.loaded = true;
+                if ( !brick_wallet.state.nwc_string ) {
+                    localStorage.clear();
+                    brick_wallet.state.nwc_string = prompt( `please enter an NWC string` );
+                }
+                brick_wallet.state.nwc_info = nwcjs.processNWCstring( brick_wallet.state.nwc_string );
+                if ( !brick_wallet.loaded ) {
+                    var delay_tolerance = 10;
+                    var balance_info = await nwcjs.getBalance( brick_wallet.state.nwc_info, delay_tolerance );
+                    if ( "error" in balance_info && balance_info[ "error" ] ) return alert( `error getting your balance: ${balance_info[ "error" ]} -- please refresh your page` );
+                    $( '.balance' ).innerText = Math.floor( balance_info.result.balance / 1000 ) + " sats";
+                    var from = brick_wallet.state.last_tx;
+                    var delay_tolerance = 10;
+                    var txs = await nwcjs.listTransactions( brick_wallet.state.nwc_info, from, null, null, null, null, null, delay_tolerance );
+                    if ( txs && txs.result && txs.result.transactions && txs.result.transactions.length ) {
+                        var new_txs = {}
+                        txs.result.transactions.forEach( new_tx => {
+                            new_tx[ "detail_hidden" ] = true;
+                            new_txs[ new_tx[ "payment_hash" ] ] = new_tx;
+                        });
+                        brick_wallet.state.history = { ...new_txs, ...brick_wallet.state.history };
+                        brick_wallet.state.last_tx = txs.result.transactions[ 0 ].created_at + 1;
+                    }
+                } else {
+                    var from = brick_wallet.state.last_tx;
+                    var delay_tolerance = 10;
+                    var txs = await nwcjs.listTransactions( brick_wallet.state.nwc_info, from, null, null, null, null, null, delay_tolerance );
+                    if ( txs && txs.result && txs.result.transactions && txs.result.transactions.length ) {
+                        var new_txs = {}
+                        txs.result.transactions.forEach( new_tx => {
+                            new_tx[ "detail_hidden" ] = true;
+                            new_txs[ new_tx[ "payment_hash" ] ] = new_tx;
+                        });
+                        brick_wallet.state.history = { ...new_txs, ...brick_wallet.state.history };
+                        brick_wallet.state.last_tx = txs.result.transactions[ 0 ].created_at + 1;
+                    }
+                    var delay_tolerance = 10;
+                    var balance_info = await nwcjs.getBalance( brick_wallet.state.nwc_info, delay_tolerance );
+                    if ( "error" in balance_info && balance_info[ "error" ] ) return alert( `error getting your balance: ${balance_info[ "error" ]} -- please refresh your page` );
+                    $( '.balance' ).innerText = Math.floor( balance_info.result.balance / 1000 ) + " sats";
+                }
+                brick_wallet.init();
+            },
+            parseHistory: () => {
+                var history = [];
+                Object.keys( brick_wallet.state.history ).forEach( txid => history.push( brick_wallet.state.history[ txid ] ) );
+                history.sort( ( a, b ) => b[ "settled_at" ] - a[ "settled_at" ] );
+                var remove_before = brick_wallet.state.offset * 5;
+                history.splice( 0, remove_before );
+                history.length = 5;
+                var html = ``;
+                history.forEach( tx => {
+                    if ( !tx ) return;
+                    var txid = tx[ "payment_hash" ];
+                    var invoice;
+                    if ( "invoice" in tx ) invoice = tx[ "invoice" ];
+                    if ( "bolt11" in tx ) invoice = tx[ "bolt11" ];
+                    if ( tx[ "type" ] === "incoming" && $( '.invoice_box' ) && $( '.invoice_box' ).innerText === invoice ) {
+                        $( '.invoice_box' ).innerText = "loading...";
+                        $( '.invoice_box' ).classList.add( "hidden" );
+                    }
+                    var arrow = `<span class="arrow incoming_arrow">&#8601;</span>`;
+                    var incoming_or_outgoing = "incoming_tx";
+                    if ( tx[ "type" ] === "outgoing" ) {
+                        arrow = `<span class="arrow outgoing_arrow">&#8599;</span>`;
+                        incoming_or_outgoing = "outgoing_tx";
+                    }
+                    var desc_div = `
+                        <div class="tx_detail_big">
+                            <p style="font-weight: bold;">Description</p>
+                            <p>${tx[ "description" ] || "[No description]"}</p>
+                        </div>
+                    `;
+                    var invoice_div = "";
+                    if ( "invoice" in tx && tx[ "invoice" ] ) invoice_div = `
+                        <div class="tx_detail_big">
+                            <p style="font-weight: bold;">Invoice</p>
+                            <p>${tx[ "invoice" ]}</p>
+                        </div>
+                    `;
+                    if ( "bolt11" in tx && tx[ "bolt11" ] ) invoice_div = `
+                        <div class="tx_detail_big">
+                            <p style="font-weight: bold;">Invoice</p>
+                            <p>${tx[ "bolt11" ]}</p>
+                        </div>
+                    `;
+                    var preimage_div = "";
+                    if ( "preimage" in tx && tx[ "preimage" ] ) preimage_div = `
+                        <div class="tx_detail_big">
+                            <p style="font-weight: bold;">Preimage</p>
+                            <p>${tx[ "preimage" ]}</p>
+                        </div>
+                    `;
+                    var hidden_or_shown = tx[ "detail_hidden" ] ? "hidden" : "";
+                    var txdata = `
+                        <div class="clickable_tx" data-txid="${txid}">
+                            <div class="${incoming_or_outgoing}">
+                                ${arrow}
+                                <span>${Math.floor( ( tx[ "amount" ] + tx[ "fees_paid" ] ) / 1000 )} sats</span>
+                            </div>
+                            <div class="hidable_tx_data ${hidden_or_shown}">
+                                <div class="tx_detail">
+                                    <span>Amount</span><span>${Math.floor( tx[ "amount" ] / 1000 )} sats</span>
+                                </div>
+                                <div class="tx_detail">
+                                    <span>Fees</span><span>${Math.floor( tx[ "fees_paid" ] / 1000 )} sats</span>
+                                </div>
+                                <div class="tx_detail">
+                                    <span>Time</span><p>${new Date( tx[ "settled_at" ] * 1000 ).toLocaleDateString( "en-CA" ) + "<br>" + new Date( tx[ "settled_at" ] * 1000 ).toLocaleTimeString()}</p>
+                                </div>
+                                ${desc_div}
+                                ${invoice_div}
+                                ${preimage_div}
+                            </div>
+                        </div>
+                    `;
+                    html = html + txdata;
+                });
+                $( '.history' ).innerHTML = html;
+                $$( '.clickable_tx' ).forEach( item => {
+                    item.onclick = () => {
+                        var txid = item.getAttribute( "data-txid" );
+                        var hidable = item.getElementsByClassName( "hidable_tx_data" )[ 0 ];
+                        if ( !hidable.classList.contains( "hidden" ) ) {
+                            brick_wallet.state.history[ txid ][ "detail_hidden" ] = true;
+                            hidable.classList.add( "hidden" );
+                        } else {
+                            brick_wallet.state.history[ txid ][ "detail_hidden" ] = false;
+                            hidable.classList.remove( "hidden" );
+                        }
+                    }
+                });
+            }
+        }
+    </script>
+    <script>
+        $( '.send' ).onclick = async () => {
+            var invoice = prompt( `enter the invoice you want to pay` );
+            var amnt = null;
+            await nwcjs.tryToPayInvoice( brick_wallet.state.nwc_info, invoice, amnt );
+        }
+        $( '.receive' ).onclick = async () => {
+            $( '.invoice_box' ).innerText = `loading...`;
+            $( '.invoice_box' ).classList.remove( "hidden" );
+            var amnt = Number( prompt( `enter whatever amount you want to receive (in sats)` ) );
+            if ( !amnt ) {
+                $( '.invoice_box' ).classList.add( "hidden" );
+                return;
+            }
+            var desc = "NWC Wallet";
+            var delay_tolerance = 10;
+            var invoice_info = await nwcjs.makeInvoice( brick_wallet.state.nwc_info, amnt, desc, delay_tolerance );
+            if ( "result_type" in invoice_info && invoice_info[ "result_type" ] !== "make_invoice" ) {
+                $( '.invoice_box' ).classList.add( "hidden" );
+                return alert( `your wallet encountered an undefined error while creating your invoice, try again` );
+            }
+            if ( "error" in invoice_info && invoice_info[ "error" ] ) return alert( `error creating your invoice: ${invoice_info[ "error" ]} -- please try again` );
+            invoice = invoice_info.result.invoice;
+            $( '.invoice_box' ).innerText = invoice;
+            var loop = async () => {
+                await brick_wallet.waitSomeTime( 3000 );
+                var delay_tolerance = 10;
+                var status_info = await nwcjs.checkInvoice( brick_wallet.state.nwc_info, invoice, delay_tolerance );
+                if ( "error" in status_info && status_info[ "error" ] ) return alert( `error checking your invoice status: ${status_info[ "error" ]} -- please refresh your page` );
+                if ( !status_info.result.settled_at ) return loop();
+                return true;
+            }
+            var paid = await loop();
+        }
+        if ( localStorage[ "brick_wallet_state" ] ) brick_wallet.state = JSON.parse( localStorage[ "brick_wallet_state" ] );
+        var walletSaver = async () => {
+            localStorage[ "brick_wallet_state" ] = JSON.stringify( brick_wallet.state );
+            await brick_wallet.waitSomeTime( 1000 );
+            walletSaver();
+        }
+        walletSaver();
+        brick_wallet.init();
+    </script>
+</body>
+</html>
