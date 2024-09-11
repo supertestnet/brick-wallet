@@ -3,10 +3,44 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, user-scalable=no">
+    <script src="https://rawgit.com/sitepoint-editors/jsqrcode/master/src/qr_packed.js"></script>
+    <script src="https://supertestnet.github.io/bitcoin-chess/js/qrcode.js"></script>
     <script src="https://supertestnet.github.io/nwcjs/nwcjs.js"></script>
     <script src="https://bundle.run/browserify-cipher@1.0.1"></script>
     <script src="https://bundle.run/noble-secp256k1@1.2.14"></script>
     <script src="https://bundle.run/bech32@2.0.0"></script>
+    <script>
+        var modalVanish = () => {
+            $( ".black-bg" ).classList.add( "hidden" );
+            $( ".modal" ).classList.add( "hidden" );
+        }
+        var showModal = content => {
+            $( ".modal" ).innerHTML = `<div class="x_modal" style="position: absolute;right: 1rem;top: 0.5rem;font-size: 2rem; cursor: pointer; color: black;" onclick="modalVanish()">&times;</div>`;
+            $( ".modal" ).innerHTML += `<div style="overflow-y: auto; max-height: 80vh; margin-top: 1.5rem;">${content}</div>`;
+            $( ".black-bg" ).classList.remove( "hidden" );
+            $( ".modal" ).classList.remove( "hidden" );
+        }
+        var showToast = content => {
+            $( '.toast' ).innerHTML = content;
+            $( '.toast' ).classList.add( "show" );
+            setTimeout( () => $( '.toast' ).classList.remove( "show" ), 3000 );
+        }
+        var createQR = content => {
+            var dataUriPngImage = document.createElement( "img" ),
+            s = QRCode.generatePNG( content, {
+                ecclevel: "M",
+                format: "html",
+                fillcolor: "#FFFFFF",
+                textcolor: "#000000",
+                margin: 4,
+                modulesize: 8,
+            });
+            dataUriPngImage.src = s;
+            dataUriPngImage.className = "qr_code";
+            dataUriPngImage.style.width = "100%";
+            return dataUriPngImage;
+        }
+    </script>
     <style>
         * {
             box-sizing: border-box;
@@ -123,6 +157,115 @@
         .disconnect {
             margin: 1rem;
         }
+        .black-bg {
+            width: 100%;
+            position: fixed;
+            top: 0;
+            left: 0;
+            background-color: black;
+            opacity: .5;
+            width: 100vw;
+            height: 100vh;
+        }
+        .modal {
+            position: fixed;
+            box-sizing: border-box;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%,-50%);
+            width: 90%;
+            max-width: 560px;
+            background-color: white;
+            border-radius: 1rem;
+            padding: 20px;
+            color: black;
+            text-align: center;
+            word-wrap: break-word;
+        }
+        .modal * {
+            color: black;
+        }
+        .modal input, .modal textarea {
+            max-width: 90%;
+        }
+        .copy_box {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 2.2rem;
+        }
+        .copy_addy {
+            width: 100%;
+            max-width: 78%;
+            word-wrap: break-word;
+            background-color: #cccccc;
+            border: 1px solid black;
+            padding: .3rem;
+            height: 100%;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: block;
+            user-select: none;
+        }
+        .copy_btn {
+            width: 100%;
+            max-width: 18%;
+            text-align: center;
+            background-color: #cccccc;
+            border: 1px solid black;
+            padding: .3rem;
+            height: 100%;
+            padding-top: 3%;
+            cursor: pointer;
+        }
+        .toast {
+            box-sizing: border-box;
+            visibility: hidden;
+            width: 250px;
+            margin-left: -125px;
+            background-color: rgb(97, 235, 52);
+            color: white;
+            text-align: center;
+            border-radius: 2px;
+            padding: 16px;
+            position: fixed;
+            z-index: 1;
+            left: 50%;
+            bottom: 30px;
+        }
+
+        .toast.show {
+            visibility: visible;
+            -webkit-animation: fadein 0.5s, fadeout 0.5s 2.5s;
+            animation: fadein 0.5s, fadeout 0.5s 2.5s;
+        }
+
+        @-webkit-keyframes fadein {
+            from {bottom: 0; opacity: 0;}
+            to {bottom: 30px; opacity: 1;}
+        }
+
+        @keyframes fadein {
+            from {bottom: 0; opacity: 0;}
+            to {bottom: 30px; opacity: 1;}
+        }
+
+        @-webkit-keyframes fadeout {
+            from {bottom: 30px; opacity: 1;}
+            to {bottom: 0; opacity: 0;}
+        }
+
+        @keyframes fadeout {
+            from {bottom: 30px; opacity: 1;}
+            to {bottom: 0; opacity: 0;}
+        }
+        .scan {
+            height: min-content;
+            width: 100%;
+            text-align: center;
+            word-wrap: break-word;
+        }
         @media screen and (max-width: 600px) {
         }
     </style>
@@ -136,11 +279,24 @@
 </script>
 </head>
 <body>
+    <div class="scan hidden">
+        <div class="row">
+            <div class="camera">
+              <canvas style="position: absolute; top: 0px; left: 0px; right: 0px; bottom: 0px; margin: auto;" hidden="" id="canvas" class="qr-canvas"></canvas>
+            </div>
+        </div>
+        <div class="flex-row">
+            <button onclick="$( '.scan' ).classList.add( 'hidden' );$( '.wallet_body' ).classList.remove( 'hidden' );">Cancel</button>
+            <button onclick="var invoice = prompt( `enter the invoice you want to pay` );send( invoice );$( '.scan' ).classList.add( 'hidden' );$( '.wallet_body' ).classList.remove( 'hidden' );">Paste invoice</button>
+        </div>
+        <div style="clear: all; height: 7rem;"></div>
+    </div>
     <div class="wallet_body">
         <center><p class="balance" style="font-weight: bold;">loading balance...</p></center></h1>
         <div class="wallet_btns">
             <button class="send">Send</button>
             <button class="receive">Receive</button>
+            <button class="scan-btn">Scan</button>
         </div>
         <center><div class="invoice_box hidden"></div></center>
         <center><p style="font-weight: bold;">History</p></center>
@@ -251,8 +407,8 @@
                     if ( "invoice" in tx ) invoice = tx[ "invoice" ];
                     if ( "bolt11" in tx ) invoice = tx[ "bolt11" ];
                     if ( tx[ "type" ] === "incoming" && $( '.invoice_box' ) && $( '.invoice_box' ).innerText === invoice ) {
-                        $( '.invoice_box' ).innerText = "loading...";
-                        $( '.invoice_box' ).classList.add( "hidden" );
+                        if ( $( '.x_modal' ) ) $( '.x_modal' ).click();
+                        $( '.invoice_box' ).innerText = "";
                     }
                     var arrow = `<span class="arrow incoming_arrow">&#8601;</span>`;
                     var incoming_or_outgoing = "incoming_tx";
@@ -330,29 +486,41 @@
         }
     </script>
     <script>
-        $( '.send' ).onclick = async () => {
-            var invoice = prompt( `enter the invoice you want to pay` );
+        var send = invoice => {
+            if ( !invoice ) invoice = prompt( `enter the invoice you want to pay` );
             var amnt = null;
-            await nwcjs.tryToPayInvoice( brick_wallet.state.nwc_info, invoice, amnt );
+            nwcjs.tryToPayInvoice( brick_wallet.state.nwc_info, invoice, amnt );
         }
+        $( '.send' ).onclick = () => {send()};
         $( '.receive' ).onclick = async () => {
-            $( '.invoice_box' ).innerText = `loading...`;
-            $( '.invoice_box' ).classList.remove( "hidden" );
             var amnt = Number( prompt( `enter whatever amount you want to receive (in sats)` ) );
             if ( !amnt ) {
-                $( '.invoice_box' ).classList.add( "hidden" );
+                $( '.invoice_box' ).innerText = "";
                 return;
             }
             var desc = "NWC Wallet";
             var delay_tolerance = 10;
             var invoice_info = await nwcjs.makeInvoice( brick_wallet.state.nwc_info, amnt, desc, delay_tolerance );
-            if ( "result_type" in invoice_info && invoice_info[ "result_type" ] !== "make_invoice" ) {
-                $( '.invoice_box' ).classList.add( "hidden" );
-                return alert( `your wallet encountered an undefined error while creating your invoice, try again` );
-            }
+            if ( "result_type" in invoice_info && invoice_info[ "result_type" ] !== "make_invoice" ) return alert( `your wallet encountered an undefined error while creating your invoice, try again` );
             if ( "error" in invoice_info && invoice_info[ "error" ] ) return alert( `error creating your invoice: ${invoice_info[ "error" ]} -- please try again` );
             invoice = invoice_info.result.invoice;
             $( '.invoice_box' ).innerText = invoice;
+            var url = "lightning:" + invoice;
+            var a = document.createElement( "a" );
+            a.href = url;
+            a.target = "_blank";
+            a.append( createQR( invoice.toUpperCase() ) );
+            var prep_div = document.createElement( "div" );
+            prep_div.append( a );
+            var div_html = prep_div.innerHTML;
+            showModal( `<div style="max-width: 15rem; margin: auto;">${div_html}<div class="copy_box"><input class="copy_addy" value="${invoice}" disabled=""><span>&nbsp;</span><div class="copy_btn">⎘</div></div></div>` );
+            $( '.copy_btn' ).onclick = () => {
+                var copytext = $( '.copy_addy' );
+                copytext.select();
+                copytext.setSelectionRange( 0, 99999 );
+                navigator.clipboard.writeText( copytext.value );
+                showToast( 'copied' );
+            }
             var loop = async () => {
                 await brick_wallet.waitSomeTime( 3000 );
                 var delay_tolerance = 10;
@@ -383,5 +551,85 @@
         walletSaver();
         brick_wallet.init();
     </script>
+    <script>
+        let qrCode = window.qrcode;
+        let scanIcon = $( '.scan-btn' );
+        var video = document.createElement("video");
+        var canvasElement = $("#canvas");
+        var canvas = canvasElement.getContext("2d");
+        var scanning = false;
+        qrcode.callback = (res) => {
+            if ( res && !String( res ).toLowerCase().includes( "error" ) ) {
+                sessionStorage[ "stop-streaming" ] = true;
+                var uri = parseURI( res );
+                if ( uri[ 1 ] ) console.log( uri[ 1 ] );
+                else console.log( uri[ 0 ] );
+                $( '.scan' ).style.display = "none";
+                $( '.wallet_body' ).classList.remove( "hidden" );
+                scanning = false;
+                if ( video && video.srcObject ) {
+                    video.srcObject.getTracks().forEach((track) => {
+                        track.stop();
+                    });
+                }
+                canvasElement.hidden = true;
+            }
+        };
+        scanIcon.onclick = () => {
+            $( '.wallet_body' ).classList.add( "hidden" );
+            $( '.scan' ).style.display = "flex";
+            $( '.scan' ).classList.remove( "hidden" );
+            canvasElement.hidden = false;
+            sessionStorage.removeItem( "stop-streaming" );
+            intval( 0 );
+            if (navigator.mediaDevices) {
+                navigator.mediaDevices
+                .getUserMedia({ video: { facingMode: "environment" } })
+                .then(function (stream) {
+                    scanning = true;
+                    canvasElement.hidden = false;
+                    video.setAttribute("playsinline", true); 
+                    video.srcObject = stream;
+                    video.play();
+                    tick();
+                });
+            }
+        };
+        function tick() {
+            var widemax = $( '.scan' ).offsetWidth;
+            var highmin = 150;
+            var widemin = Math.floor( ( highmin * 16 ) / 9 );
+            var highmax = Math.floor( ( 9 * widemax ) / 16 );
+            var wideact = ( widemax > widemin ) ? widemax:widemin;
+            var highact = ( wideact == widemin ) ? highmin:highmax;
+            canvasElement.height = highact;
+            canvasElement.width = wideact;
+            canvas.transform(1,0,0,1.5,0,0);
+            if ( window.innerWidth < 600 ) {
+                canvas.transform(1,0,0,2,0,0);
+            }
+            canvas.drawImage(video, 0, 0, canvasElement.width, canvasElement.height);
+            scanning && requestAnimationFrame(tick);
+        }
+        function scan( img ) {
+            try {
+                qrCode.decode( img );
+            } catch (e) {
+            }
+        }
+        function intval( num ) {
+            if ( num > 20 && num % 5 == 0 ) {
+                var img = canvasElement.toDataURL( 'image/png' );
+                scan( img );
+            }
+            num = num + 1;
+            if ( !sessionStorage[ "stop-streaming" ] ) {
+                setTimeout( function() {intval( num );}, 100 );
+            }
+        }
+    </script>
+    <div class="black-bg hidden" onclick="modalVanish();"></div>
+    <div class="modal hidden"></div>
+    <div class="toast"></div>
 </body>
 </html>
