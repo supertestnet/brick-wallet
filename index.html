@@ -391,7 +391,7 @@
                     var invoice;
                     if ( "invoice" in tx ) invoice = tx[ "invoice" ];
                     if ( "bolt11" in tx ) invoice = tx[ "bolt11" ];
-                    if ( tx[ "type" ] === "incoming" && $( '.invoice_box' ) && $( '.invoice_box' ).innerText === invoice ) {
+                    if ( $( '.invoice_box' ) && $( '.invoice_box' ).innerText === invoice ) {
                         if ( $( '.x_modal' ) ) $( '.x_modal' ).click();
                         $( '.invoice_box' ).innerText = "";
                     }
@@ -485,6 +485,8 @@
             else conf = confirm( `Are you sure you want to pay that invoice?` );
             if ( !conf ) return;
             var amnt = null;
+            $( '.invoice_box' ).innerText = invoice;
+            showModal( `<p>loading...</p>` );
             nwcjs.tryToPayInvoice( brick_wallet.state.nwc_info, invoice, amnt );
         }
         var scan = () => {
@@ -535,6 +537,7 @@
                 $( '.invoice_box' ).innerText = "";
                 return;
             }
+            showModal( `<p>loading...</p>` );
             var desc = "NWC Wallet";
             var delay_tolerance = 10;
             var invoice_info = await nwcjs.makeInvoice( brick_wallet.state.nwc_info, amnt, desc, delay_tolerance );
