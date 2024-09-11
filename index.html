@@ -407,6 +407,13 @@
                             <p>${tx[ "description" ] || "[No description]"}</p>
                         </div>
                     `;
+                    var pmthash_div = "";
+                    if ( "payment_hash" in tx && tx[ "payment_hash" ] ) pmthash_div = `
+                        <div class="tx_detail_big">
+                            <p style="font-weight: bold;">Payment hash</p>
+                            <p>${tx[ "payment_hash" ]}</p>
+                        </div>
+                    `;
                     var invoice_div = "";
                     if ( "invoice" in tx && tx[ "invoice" ] ) invoice_div = `
                         <div class="tx_detail_big">
@@ -442,11 +449,12 @@
                                     <span>Fees</span><span>${Math.floor( tx[ "fees_paid" ] / 1000 )} sats</span>
                                 </div>
                                 <div class="tx_detail">
-                                    <span>Time</span><p>${new Date( tx[ "settled_at" ] * 1000 ).toLocaleDateString( "en-CA" ) + "<br>" + new Date( tx[ "settled_at" ] * 1000 ).toLocaleTimeString()}</p>
+                                    <span>Time</span><div>${new Date( tx[ "settled_at" ] * 1000 ).toLocaleDateString( "en-CA" ) + "<br>" + new Date( tx[ "settled_at" ] * 1000 ).toLocaleTimeString()}</div>
                                 </div>
                                 ${desc_div}
-                                ${invoice_div}
+                                ${pmthash_div}
                                 ${preimage_div}
+                                ${invoice_div}
                             </div>
                         </div>
                     `;
