@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, user-scalable=no">
-    <script src="https://rawgit.com/sitepoint-editors/jsqrcode/master/src/qr_packed.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/mebjas/html5-qrcode@master/minified/html5-qrcode.min.js"></script>
     <script src="https://supertestnet.github.io/bitcoin-chess/js/qrcode.js"></script>
     <script src="https://supertestnet.github.io/nwcjs/nwcjs.js"></script>
     <script src="https://bundle.run/browserify-cipher@1.0.1"></script>
@@ -260,12 +260,6 @@
             from {bottom: 30px; opacity: 1;}
             to {bottom: 0; opacity: 0;}
         }
-        .scan {
-            height: min-content;
-            width: 100%;
-            text-align: center;
-            word-wrap: break-word;
-        }
         @media screen and (max-width: 600px) {
         }
     </style>
@@ -279,17 +273,9 @@
 </script>
 </head>
 <body>
-    <div class="scan hidden">
-        <div class="row">
-            <div class="camera">
-              <canvas style="position: absolute; top: 0px; left: 0px; right: 0px; bottom: 0px; margin: auto;" hidden="" id="canvas" class="qr-canvas"></canvas>
-            </div>
-        </div>
-        <div class="flex-row">
-            <button onclick="$( '.scan' ).classList.add( 'hidden' );$( '.wallet_body' ).classList.remove( 'hidden' );">Cancel</button>
-            <button onclick="var invoice = prompt( `enter the invoice you want to pay` );send( invoice );$( '.scan' ).classList.add( 'hidden' );$( '.wallet_body' ).classList.remove( 'hidden' );">Paste invoice</button>
-        </div>
-        <div style="clear: all; height: 7rem;"></div>
+    <div class="scanner_parent hidden">
+        <div id="scanner"></div>
+        <p><button class="cancel_scanner">Cancel</button> <button class="paste_invoice">Paste invoice</button></p>
     </div>
     <div class="wallet_body">
         <center><p class="balance" style="font-weight: bold;">loading balance...</p></center></h1>
@@ -552,79 +538,43 @@
         brick_wallet.init();
     </script>
     <script>
-        let qrCode = window.qrcode;
-        let scanIcon = $( '.scan-btn' );
-        var video = document.createElement("video");
-        var canvasElement = $("#canvas");
-        var canvas = canvasElement.getContext("2d");
-        var scanning = false;
-        qrcode.callback = (res) => {
-            if ( res && !String( res ).toLowerCase().includes( "error" ) ) {
-                sessionStorage[ "stop-streaming" ] = true;
-                var uri = parseURI( res );
-                if ( uri[ 1 ] ) alert( uri[ 1 ] );
-                else alert( uri[ 0 ] );
-                $( '.scan' ).classList.add( "hidden" );
-                $( '.wallet_body' ).classList.remove( "hidden" );
-                scanning = false;
-                if ( video && video.srcObject ) {
-                    video.srcObject.getTracks().forEach((track) => {
-                        track.stop();
-                    });
-                }
-                canvasElement.hidden = true;
-            }
-        };
-        scanIcon.onclick = () => {
+        $( '.scan-btn' ).onclick = () => {
             $( '.wallet_body' ).classList.add( "hidden" );
-            $( '.scan' ).style.display = "flex";
-            $( '.scan' ).classList.remove( "hidden" );
-            canvasElement.hidden = false;
-            sessionStorage.removeItem( "stop-streaming" );
-            intval( 0 );
-            if (navigator.mediaDevices) {
-                navigator.mediaDevices
-                .getUserMedia({ video: { facingMode: "environment" } })
-                .then(function (stream) {
-                    scanning = true;
-                    canvasElement.hidden = false;
-                    video.setAttribute("playsinline", true); 
-                    video.srcObject = stream;
-                    video.play();
-                    tick();
-                });
+            $( '.scanner_parent' ).classList.remove( "hidden" );
+            var html5QrCode = new Html5Qrcode( "scanner" );
+            html5QrCode.start(
+                { facingMode: "environment" },
+                { fps: 10, qrbox: { width: 300, height: 300 } },
+                ( decodedText, decodedResult ) => {
+                    $( '.wallet_body' ).classList.remove( "hidden" );
+                    $( '.scanner_parent' ).classList.add( "hidden" );
+                    alert( decodedText );
+                    html5QrCode
+                        .stop()
+                        .then( res => {
+                            html5QrCode.clear();
+                        });
+                }
+            );
+            $( '.cancel_scanner' ).onclick = () => {
+                $( '.wallet_body' ).classList.remove( "hidden" );
+                $( '.scanner_parent' ).classList.add( "hidden" );
+                html5QrCode
+                    .stop()
+                    .then( res => {
+                        html5QrCode.clear();
+                    });
             }
-        };
-        function tick() {
-            var widemax = $( '.scan' ).offsetWidth;
-            var highmin = 150;
-            var widemin = Math.floor( ( highmin * 16 ) / 9 );
-            var highmax = Math.floor( ( 9 * widemax ) / 16 );
-            var wideact = ( widemax > widemin ) ? widemax:widemin;
-            var highact = ( wideact == widemin ) ? highmin:highmax;
-            canvasElement.height = highact;
-            canvasElement.width = wideact;
-            canvas.transform(1,0,0,1.5,0,0);
-            if ( window.innerWidth < 600 ) {
-                canvas.transform(1,0,0,2,0,0);
-            }
-            canvas.drawImage(video, 0, 0, canvasElement.width, canvasElement.height);
-            scanning && requestAnimationFrame(tick);
-        }
-        function scan( img ) {
-            try {
-                qrCode.decode( img );
-            } catch (e) {
-            }
-        }
-        function intval( num ) {
-            if ( num > 20 && num % 5 == 0 ) {
-                var img = canvasElement.toDataURL( 'image/png' );
-                scan( img );
-            }
-            num = num + 1;
-            if ( !sessionStorage[ "stop-streaming" ] ) {
-                setTimeout( function() {intval( num );}, 100 );
+            $( '.paste_invoice' ).onclick = () => {
+                var invoice = prompt( `enter the invoice you want to pay` );
+                send( invoice );
+                $( '.wallet_body' ).classList.remove( "hidden" );
+                $( '.scanner_parent' ).classList.add( "hidden" );
+                html5QrCode
+                    .stop()
+                    .then( res => {
+                        html5QrCode.clear();
+                    });
             }
         }
     </script>
