@@ -198,8 +198,10 @@
                 if ( !brick_wallet.loaded ) {
                     var delay_tolerance = 10;
                     var balance_info = await nwcjs.getBalance( brick_wallet.state.nwc_info, delay_tolerance );
-                    if ( "error" in balance_info && balance_info[ "error" ] ) return alert( `error getting your balance: ${balance_info[ "error" ]} -- please refresh your page` );
-                    $( '.balance' ).innerText = Math.floor( balance_info.result.balance / 1000 ) + " sats";
+                    if ( "result_type" in balance_info && balance_info[ "result_type" ] === "get_balance" ) {
+                        if ( "error" in balance_info && balance_info[ "error" ] ) return alert( `error getting your balance: ${balance_info[ "error" ]} -- please refresh your page` );
+                        $( '.balance' ).innerText = Math.floor( balance_info.result.balance / 1000 ) + " sats";
+                    }
                     var from = brick_wallet.state.last_tx;
                     var delay_tolerance = 10;
                     var txs = await nwcjs.listTransactions( brick_wallet.state.nwc_info, from, null, null, null, null, null, delay_tolerance );
@@ -227,8 +229,10 @@
                     }
                     var delay_tolerance = 10;
                     var balance_info = await nwcjs.getBalance( brick_wallet.state.nwc_info, delay_tolerance );
-                    if ( "error" in balance_info && balance_info[ "error" ] ) return alert( `error getting your balance: ${balance_info[ "error" ]} -- please refresh your page` );
-                    $( '.balance' ).innerText = Math.floor( balance_info.result.balance / 1000 ) + " sats";
+                    if ( "result_type" in balance_info && balance_info[ "result_type" ] === "get_balance" ) {
+                        if ( "error" in balance_info && balance_info[ "error" ] ) return alert( `error getting your balance: ${balance_info[ "error" ]} -- please refresh your page` );
+                        $( '.balance' ).innerText = Math.floor( balance_info.result.balance / 1000 ) + " sats";
+                    }
                 }
                 brick_wallet.init();
             },
