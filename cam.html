@@ -46,18 +46,21 @@
         </script>
     </head>
     <body>
-    	<div style="width: 500px" id="reader"></div>
-    	<script>
-    		function onScanSuccess(decodedText, decodedResult) {
-    		    // Handle on success condition with the decoded text or result.
-    		    alert(`${decodedText}`);
-    		    alert(`${decodedResult}`);
-    		    html5QrcodeScanner.clear();
-    		}
-
-    		var html5QrcodeScanner = new Html5QrcodeScanner(
-    			"reader", { fps: 10, qrbox: 250 });
-    		html5QrcodeScanner.render(onScanSuccess);
-    	</script>
+        <div style="width: 500px" id="reader"></div>
+        <script>
+            var html5QrCode = new Html5Qrcode( "reader" );
+            html5QrCode.start(
+                { facingMode: "environment" },
+                { fps: 10, qrbox: { width: 300, height: 300 } },
+                ( decodedText, decodedResult ) => {
+                    alert( decodedText );
+                    html5QrCode
+                        .stop()
+                        .then( res => {
+                            html5QrCode.clear();
+                        });
+                }
+            );
+        </script>
     </body>
 </html>
