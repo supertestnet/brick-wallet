@@ -282,7 +282,6 @@
         <div class="wallet_btns">
             <button class="send">Send</button>
             <button class="receive">Receive</button>
-            <button class="scan-btn">Scan</button>
         </div>
         <center><div class="invoice_box hidden"></div></center>
         <center><p style="font-weight: bold;">History</p></center>
@@ -473,11 +472,55 @@
     </script>
     <script>
         var send = invoice => {
+            var conf = true;
             if ( !invoice ) invoice = prompt( `enter the invoice you want to pay` );
+            else conf = confirm( `Are you sure you want to pay that invoice?` );
+            if ( !conf ) return;
             var amnt = null;
             nwcjs.tryToPayInvoice( brick_wallet.state.nwc_info, invoice, amnt );
         }
-        $( '.send' ).onclick = () => {send()};
+        var scan = () => {
+            $( '.wallet_body' ).classList.add( "hidden" );
+            $( '.scanner_parent' ).classList.remove( "hidden" );
+            var html5QrCode = new Html5Qrcode( "scanner" );
+            html5QrCode.start(
+                { facingMode: "environment" },
+                { fps: 10, qrbox: { width: 300, height: 300 } },
+                ( decodedText, decodedResult ) => {
+                    $( '.wallet_body' ).classList.remove( "hidden" );
+                    $( '.scanner_parent' ).classList.add( "hidden" );
+                    html5QrCode
+                        .stop()
+                        .then( res => {
+                            html5QrCode.clear();
+                        });
+                    if ( decodedText.startsWith( "lightning:" ) || decodedText.startsWith( "LIGHTNING:" ) ) decodedText = decodedText.substring( 10 );
+                    if ( !decodedText.startsWith( "lnbc" ) ) alert( `your invoice was invalid, try again` );
+                    send( decodedText );
+                }
+            );
+            $( '.cancel_scanner' ).onclick = () => {
+                $( '.wallet_body' ).classList.remove( "hidden" );
+                $( '.scanner_parent' ).classList.add( "hidden" );
+                html5QrCode
+                    .stop()
+                    .then( res => {
+                        html5QrCode.clear();
+                    });
+            }
+            $( '.paste_invoice' ).onclick = () => {
+                var invoice = prompt( `enter the invoice you want to pay` );
+                send( invoice );
+                $( '.wallet_body' ).classList.remove( "hidden" );
+                $( '.scanner_parent' ).classList.add( "hidden" );
+                html5QrCode
+                    .stop()
+                    .then( res => {
+                        html5QrCode.clear();
+                    });
+            }
+        }
+        $( '.send' ).onclick = () => {scan()};
         $( '.receive' ).onclick = async () => {
             var amnt = Number( prompt( `enter whatever amount you want to receive (in sats)` ) );
             if ( !amnt ) {
@@ -536,47 +579,6 @@
         }
         walletSaver();
         brick_wallet.init();
-    </script>
-    <script>
-        $( '.scan-btn' ).onclick = () => {
-            $( '.wallet_body' ).classList.add( "hidden" );
-            $( '.scanner_parent' ).classList.remove( "hidden" );
-            var html5QrCode = new Html5Qrcode( "scanner" );
-            html5QrCode.start(
-                { facingMode: "environment" },
-                { fps: 10, qrbox: { width: 300, height: 300 } },
-                ( decodedText, decodedResult ) => {
-                    $( '.wallet_body' ).classList.remove( "hidden" );
-                    $( '.scanner_parent' ).classList.add( "hidden" );
-                    alert( decodedText );
-                    html5QrCode
-                        .stop()
-                        .then( res => {
-                            html5QrCode.clear();
-                        });
-                }
-            );
-            $( '.cancel_scanner' ).onclick = () => {
-                $( '.wallet_body' ).classList.remove( "hidden" );
-                $( '.scanner_parent' ).classList.add( "hidden" );
-                html5QrCode
-                    .stop()
-                    .then( res => {
-                        html5QrCode.clear();
-                    });
-            }
-            $( '.paste_invoice' ).onclick = () => {
-                var invoice = prompt( `enter the invoice you want to pay` );
-                send( invoice );
-                $( '.wallet_body' ).classList.remove( "hidden" );
-                $( '.scanner_parent' ).classList.add( "hidden" );
-                html5QrCode
-                    .stop()
-                    .then( res => {
-                        html5QrCode.clear();
-                    });
-            }
-        }
     </script>
     <div class="black-bg hidden" onclick="modalVanish();"></div>
     <div class="modal hidden"></div>
