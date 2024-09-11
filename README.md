@@ -5,4 +5,4 @@ A web frontend for NWC wallets
 Just click here: https://supertestnet.github.io/brick-wallet/
 
 # What is this?
-This is a basic web wallet with send, receive, and a history tab. If you try to use it, it will first ask you to connect it to a backend that supports NWC. After that, you can send and receive money as well as view your transaction history.
+This is a basic web wallet with send, receive, and a history tab. If you try to use it, it will first ask you to connect it to a backend that supports NWC -- e.g. consider connecting it to [Bankify](https://supertestnet.github.io/bankify/). After that, you can send and receive money as well as view your transaction history.
