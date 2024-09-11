@@ -116,6 +116,9 @@
         .tx_detail_big {
             margin: .5rem 0;
         }
+        .disconnect {
+            margin: 1rem;
+        }
         @media screen and (max-width: 600px) {
         }
     </style>
@@ -139,8 +142,10 @@
         <center><p style="font-weight: bold;">History</p></center>
         <center><div class="hist_btns hidden"><button class="hist_btn hist_back"><</button><button class="hist_btn hist_fwd">></button></div></center>
         <center><div class="history">loading history...</div></center>
+        <center><button class="disconnect">Disconnect wallet</button></center>
     </div>
     <script>
+        var stop_the_save;
         var brick_wallet = {
             state: {
                 // nwc_string: "nostr+walletconnect://114ae6acd58af62cb167ffc127eec8ac77a587e4297610ed59fc219bfe4c1f7a?relay=wss://nostrue.com&secret=3bf62c4b2f68d5d07339e88fba4bab8969e9b1b2273b2daf580e118aa43dbd33",
@@ -350,10 +355,21 @@
             }
             var paid = await loop();
         }
+        $( '.disconnect' ).onclick = () => {
+            var conf = confirm( `Are you sure you want to disconnect this wallet?` );
+            if ( !conf ) return;
+            localStorage.removeItem( "brick_wallet_state" );
+            stop_the_save = true;
+        }
         if ( localStorage[ "brick_wallet_state" ] ) brick_wallet.state = JSON.parse( localStorage[ "brick_wallet_state" ] );
         var walletSaver = async () => {
-            localStorage[ "brick_wallet_state" ] = JSON.stringify( brick_wallet.state );
-            await brick_wallet.waitSomeTime( 1000 );
+            if ( stop_the_save ) {
+                window.location.reload();
+                return;
+            } else {
+                localStorage[ "brick_wallet_state" ] = JSON.stringify( brick_wallet.state );
+                await brick_wallet.waitSomeTime( 1000 );
+            }
             walletSaver();
         }
         walletSaver();
