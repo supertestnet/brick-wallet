@@ -562,9 +562,9 @@
             if ( res && !String( res ).toLowerCase().includes( "error" ) ) {
                 sessionStorage[ "stop-streaming" ] = true;
                 var uri = parseURI( res );
-                if ( uri[ 1 ] ) console.log( uri[ 1 ] );
-                else console.log( uri[ 0 ] );
-                $( '.scan' ).style.display = "none";
+                if ( uri[ 1 ] ) alert( uri[ 1 ] );
+                else alert( uri[ 0 ] );
+                $( '.scan' ).classList.add( "hidden" );
                 $( '.wallet_body' ).classList.remove( "hidden" );
                 scanning = false;
                 if ( video && video.srcObject ) {
