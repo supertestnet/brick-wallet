@@ -486,7 +486,7 @@
             if ( !conf ) return;
             var amnt = null;
             $( '.invoice_box' ).innerText = invoice;
-            showModal( `<p>loading...</p>` );
+            showModal( `<p>sending...</p>` );
             nwcjs.tryToPayInvoice( brick_wallet.state.nwc_info, invoice, amnt );
         }
         var scan = () => {
