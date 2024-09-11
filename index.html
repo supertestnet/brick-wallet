@@ -495,8 +495,7 @@
                             html5QrCode.clear();
                         });
                     if ( decodedText.startsWith( "lightning:" ) || decodedText.startsWith( "LIGHTNING:" ) ) decodedText = decodedText.substring( 10 );
-                    alert( decodedText );
-                    if ( !decodedText.startsWith( "lnbc" ) ) return alert( `your invoice was invalid, try again` );
+                    if ( !decodedText.startsWith( "lnbc" ) && !decodedText.startsWith( "LNBC" ) ) return alert( `your invoice was invalid, try again` );
                     send( decodedText );
                 }
             );
