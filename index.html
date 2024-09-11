@@ -78,7 +78,7 @@
             margin: auto;
             word-wrap: break-word;
         }
-        .wallet_btns {
+        .wallet_btns, .scanner_btns {
             display: flex;
             justify-content: space-between;
         }
@@ -275,7 +275,7 @@
 <body>
     <div class="scanner_parent hidden">
         <div id="scanner"></div>
-        <p><button class="cancel_scanner">Cancel</button> <button class="paste_invoice">Paste invoice</button></p>
+        <p class="scanner_btns"><button class="paste_invoice">Paste invoice</button> <button class="cancel_scanner">Cancel</button></p>
     </div>
     <div class="wallet_body">
         <center><p class="balance" style="font-weight: bold;">loading balance...</p></center></h1>
@@ -495,7 +495,8 @@
                             html5QrCode.clear();
                         });
                     if ( decodedText.startsWith( "lightning:" ) || decodedText.startsWith( "LIGHTNING:" ) ) decodedText = decodedText.substring( 10 );
-                    if ( !decodedText.startsWith( "lnbc" ) ) alert( `your invoice was invalid, try again` );
+                    alert( decodedText );
+                    if ( !decodedText.startsWith( "lnbc" ) ) return alert( `your invoice was invalid, try again` );
                     send( decodedText );
                 }
             );
