@@ -75,7 +75,7 @@
         .history > :first-child {
             border-top: 1px solid black;
         }
-        .clickable_tx {
+        .clickable_tx_parent {
             border-bottom: 1px solid black;
         }
         .incoming_tx, .outgoing_tx {
@@ -265,8 +265,8 @@
                     `;
                     var hidden_or_shown = tx[ "detail_hidden" ] ? "hidden" : "";
                     var txdata = `
-                        <div class="clickable_tx" data-txid="${txid}">
-                            <div class="${incoming_or_outgoing}">
+                        <div class="clickable_tx_parent" data-txid="${txid}">
+                            <div class="clickable_tx ${incoming_or_outgoing}">
                                 ${arrow}
                                 <span>${Math.floor( ( tx[ "amount" ] + tx[ "fees_paid" ] ) / 1000 )} sats</span>
                             </div>
@@ -291,8 +291,9 @@
                 $( '.history' ).innerHTML = html;
                 $$( '.clickable_tx' ).forEach( item => {
                     item.onclick = () => {
-                        var txid = item.getAttribute( "data-txid" );
-                        var hidable = item.getElementsByClassName( "hidable_tx_data" )[ 0 ];
+                        var parent = item.parentElement;
+                        var txid = parent.getAttribute( "data-txid" );
+                        var hidable = parent.getElementsByClassName( "hidable_tx_data" )[ 0 ];
                         if ( !hidable.classList.contains( "hidden" ) ) {
                             brick_wallet.state.history[ txid ][ "detail_hidden" ] = true;
                             hidable.classList.add( "hidden" );
