@@ -10,4 +10,6 @@ This is a basic web wallet with send, receive, and a history tab. If you try to 
 # What is NWC?
 It stands for Nostr Wallet Connect and it's a standardized api for controlling lightning wallets programmatically. Learn more here: https://nwc.dev
 
+# Pic of Brick Wallet
+
 <kbd><img src="https://supertestnet.github.io/brick-wallet/brick%20wallet.png"></img></kbd>
