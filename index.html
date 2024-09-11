@@ -173,7 +173,7 @@
                 brick_wallet.loaded = true;
                 if ( !brick_wallet.state.nwc_string ) {
                     localStorage.clear();
-                    brick_wallet.state.nwc_string = prompt( `please enter an NWC string` );
+                    brick_wallet.state.nwc_string = prompt( `please enter an NWC string with full permissions` );
                 }
                 brick_wallet.state.nwc_info = nwcjs.processNWCstring( brick_wallet.state.nwc_string );
                 if ( !brick_wallet.loaded ) {
