@@ -44,6 +44,10 @@
             margin: auto;
             word-wrap: break-word;
         }
+        .wallet_btns {
+            display: flex;
+            justify-content: space-between;
+        }
         .invoice_box {
             margin-top: 1rem;
             border: 1px solid black;
@@ -134,10 +138,10 @@
 <body>
     <div class="wallet_body">
         <center><p class="balance" style="font-weight: bold;">loading balance...</p></center></h1>
-        <center>
+        <div class="wallet_btns">
             <button class="send">Send</button>
             <button class="receive">Receive</button>
-        </center>
+        </div>
         <center><div class="invoice_box hidden"></div></center>
         <center><p style="font-weight: bold;">History</p></center>
         <center><div class="hist_btns hidden"><button class="hist_btn hist_back"><</button><button class="hist_btn hist_fwd">></button></div></center>
