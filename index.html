@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, user-scalable=no">
+    <link rel="shortcut icon" type="image/x-icon" href="https://supertestnet.github.io/brick-wallet/favicon.ico">
     <script src="https://cdn.jsdelivr.net/gh/mebjas/html5-qrcode@master/minified/html5-qrcode.min.js"></script>
     <script src="https://supertestnet.github.io/bitcoin-chess/js/qrcode.js"></script>
     <script src="https://supertestnet.github.io/bitcoin-chess/js/bolt11.js"></script>
@@ -705,7 +706,7 @@
             var delay_tolerance = 10;
             var invoice_info = await nwcjs.makeInvoice( brick_wallet.state.nwc_info, amnt, desc, delay_tolerance );
             if ( "result_type" in invoice_info && invoice_info[ "result_type" ] !== "make_invoice" ) return alert( `your wallet encountered an undefined error while creating your invoice, try again` );
-            if ( "error" in invoice_info && invoice_info[ "error" ] ) return alert( `error creating your invoice: ${invoice_info[ "error" ]} -- please try again` );
+            if ( "error" in invoice_info && invoice_info[ "error" ] ) return alert( `error creating your invoice: ${JSON.stringify( invoice_info[ "error" ] )} -- please try again` );
             invoice = invoice_info.result.invoice;
             $( '.invoice_box' ).innerText = invoice;
             var url = "lightning:" + invoice;
@@ -728,7 +729,7 @@
                 await brick_wallet.waitSomeTime( 3000 );
                 var delay_tolerance = 10;
                 var status_info = await nwcjs.checkInvoice( brick_wallet.state.nwc_info, invoice, delay_tolerance );
-                if ( "error" in status_info && status_info[ "error" ] ) return alert( `error checking your invoice status: ${status_info[ "error" ]} -- please refresh your page` );
+                if ( "error" in status_info && status_info[ "error" ] ) return alert( `error checking your invoice status: ${JSON.stringify( status_info[ "error" ] )} -- please refresh your page` );
                 if ( !status_info.result.settled_at ) return loop();
                 return true;
             }
