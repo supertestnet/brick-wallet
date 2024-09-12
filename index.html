@@ -592,6 +592,7 @@
                     new_txs[ new_tx[ "payment_hash" ] ] = new_tx;
                     brick_wallet.state.history = { ...new_txs, ...brick_wallet.state.history };
                     brick_wallet.parseHistory();
+                    if ( !$( '.modal' ) ) return;
                     showModal( "<p>paid</p>" );
                     await brick_wallet.waitSomeTime( 1000 );
                     if ( $( '.x_modal' ) ) $( '.x_modal' ).click();
