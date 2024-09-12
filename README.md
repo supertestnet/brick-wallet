@@ -13,3 +13,17 @@ It stands for Nostr Wallet Connect and it's a standardized api for controlling l
 # Pic of Brick Wallet
 
 <kbd><img src="https://supertestnet.github.io/brick-wallet/brick%20wallet.png"></img></kbd>
+
+# Features of Brick Wallet
+
+- [x] Simple wallet
+- [x] Send/receive/history
+- [x] Supports all devices (it's a mobile-friendly web app)
+- [x] No need to install anything special on your phone or laptop
+- [x] Connect to your own node or a custodian via NWC
+- [x] Pay to lightning addresses
+- [x] Pay to lnurl paycodes
+- [ ] Receive from lnurl withdraw codes
+- [ ] Built-in base layer wallet
+- [ ] Submarine swaps from base layer
+- [ ] Submarine swaps to base layer
