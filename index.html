@@ -89,6 +89,9 @@
         .hist_btn {
             width: 2rem;
         }
+        .hist_btn:disabled {
+            background-color: #cccccc;
+        }
         .wallet_btns, .scanner_btns {
             display: flex;
             justify-content: space-between;
@@ -320,7 +323,9 @@
                     $( '.hist_btns' ).classList.remove( "hidden" );
                     var len_of_hist = Object.keys( brick_wallet.state.history ).length;
                     if ( ( brick_wallet.state.offset + 1 ) * 5 >= len_of_hist ) $( '.hist_fwd' ).disabled = true;
+                    else $( '.hist_fwd' ).disabled = false;
                     if ( !brick_wallet.state.offset ) $( '.hist_back' ).disabled = true;
+                    else $( '.hist_back' ).disabled = false;
                     if ( brick_wallet.state.offset < 0 ) brick_wallet.state.offset = 0;
                     $( '.hist_fwd' ).onclick = () => {
                         if ( $( '.hist_fwd' ).disabled ) return;
@@ -348,44 +353,24 @@
                     brick_wallet.state.nwc_string = prompt( `please enter an NWC string with full permissions` );
                 }
                 brick_wallet.state.nwc_info = nwcjs.processNWCstring( brick_wallet.state.nwc_string );
-                if ( !brick_wallet.loaded ) {
-                    var delay_tolerance = 10;
-                    var balance_info = await nwcjs.getBalance( brick_wallet.state.nwc_info, delay_tolerance );
-                    if ( "result_type" in balance_info && balance_info[ "result_type" ] === "get_balance" ) {
-                        if ( "error" in balance_info && balance_info[ "error" ] ) return alert( `error getting your balance: ${balance_info[ "error" ]} -- please refresh your page` );
-                        $( '.balance' ).innerText = Math.floor( balance_info.result.balance / 1000 ) + " sats";
-                    }
-                    var from = brick_wallet.state.last_tx;
-                    var delay_tolerance = 10;
-                    var txs = await nwcjs.listTransactions( brick_wallet.state.nwc_info, from, null, null, null, null, null, delay_tolerance );
-                    if ( txs && txs.result && txs.result.transactions && txs.result.transactions.length ) {
-                        var new_txs = {}
-                        txs.result.transactions.forEach( new_tx => {
-                            new_tx[ "detail_hidden" ] = true;
-                            new_txs[ new_tx[ "payment_hash" ] ] = new_tx;
-                        });
-                        brick_wallet.state.history = { ...new_txs, ...brick_wallet.state.history };
-                        brick_wallet.state.last_tx = txs.result.transactions[ 0 ].created_at + 1;
-                    }
-                } else {
-                    var from = brick_wallet.state.last_tx;
-                    var delay_tolerance = 10;
-                    var txs = await nwcjs.listTransactions( brick_wallet.state.nwc_info, from, null, null, null, null, null, delay_tolerance );
-                    if ( txs && txs.result && txs.result.transactions && txs.result.transactions.length ) {
-                        var new_txs = {}
-                        txs.result.transactions.forEach( new_tx => {
-                            new_tx[ "detail_hidden" ] = true;
-                            new_txs[ new_tx[ "payment_hash" ] ] = new_tx;
-                        });
-                        brick_wallet.state.history = { ...new_txs, ...brick_wallet.state.history };
-                        brick_wallet.state.last_tx = txs.result.transactions[ 0 ].created_at + 1;
-                    }
-                    var delay_tolerance = 10;
-                    var balance_info = await nwcjs.getBalance( brick_wallet.state.nwc_info, delay_tolerance );
-                    if ( "result_type" in balance_info && balance_info[ "result_type" ] === "get_balance" ) {
-                        if ( "error" in balance_info && balance_info[ "error" ] ) return alert( `error getting your balance: ${balance_info[ "error" ]} -- please refresh your page` );
-                        $( '.balance' ).innerText = Math.floor( balance_info.result.balance / 1000 ) + " sats";
-                    }
+                var sum = 0;
+                Object.keys( brick_wallet.state.history ).forEach( txid => {
+                    var tx = brick_wallet.state.history[ txid ];
+                    if ( tx.type === "incoming" ) sum = sum + tx[ "amount" ];
+                    else sum = sum - ( tx[ "amount" ] + tx[ "fees_paid" ] );
+                });
+                $( '.balance' ).innerText = Math.floor( sum / 1000 ) + " sats";
+                var from = brick_wallet.state.last_tx;
+                var delay_tolerance = 10;
+                var txs = await nwcjs.listTransactions( brick_wallet.state.nwc_info, from, null, null, null, null, null, delay_tolerance );
+                if ( txs && txs.result && txs.result.transactions && txs.result.transactions.length ) {
+                    var new_txs = {}
+                    txs.result.transactions.forEach( new_tx => {
+                        new_tx[ "detail_hidden" ] = true;
+                        new_txs[ new_tx[ "payment_hash" ] ] = new_tx;
+                    });
+                    brick_wallet.state.history = { ...new_txs, ...brick_wallet.state.history };
+                    brick_wallet.state.last_tx = txs.result.transactions[ 0 ].created_at + 1;
                 }
                 brick_wallet.init();
             },
@@ -491,7 +476,7 @@
         }
     </script>
     <script>
-        var send = invoice => {
+        var send = async invoice => {
             var conf = true;
             if ( !invoice ) invoice = prompt( `enter the invoice you want to pay` );
             else conf = confirm( `Are you sure you want to pay that invoice?` );
@@ -500,6 +485,25 @@
             $( '.invoice_box' ).innerText = invoice;
             showModal( `<p>sending...</p>` );
             nwcjs.tryToPayInvoice( brick_wallet.state.nwc_info, invoice, amnt );
+            await brick_wallet.waitSomeTime( 2000 );
+            var loop = async () => {
+                var delay_tolerance = 10;
+                var status = await nwcjs.checkInvoice( brick_wallet.state.nwc_info, invoice, delay_tolerance );
+                if ( "error" in status && status[ "error" ] && "message" in status[ "error" ] && status[ "error" ][ "message" ] ) {
+                    var err_msg = status[ "error" ][ "message" ];
+                    if ( err_msg === "invoice not found" ) err_msg = "Your payment was not sent due to an unknown error, please try again.";
+                    return showModal( `<p>${err_msg}</p>` );
+                }
+                if ( "result" in status && status[ "result" ] && "settled_at" in status[ "result" ] && status[ "result" ][ "settled_at" ] ) {
+                    showModal( "<p>paid</p>" );
+                    await brick_wallet.waitSomeTime( 1000 );
+                    if ( $( '.x_modal' ) ) $( '.x_modal' ).click();
+                    return;
+                }
+                await brick_wallet.waitSomeTime( 2000 );
+                return await loop();
+            }
+            loop();
         }
         var scan = () => {
             $( '.wallet_body' ).classList.add( "hidden" );
