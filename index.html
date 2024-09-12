@@ -63,6 +63,35 @@
             var returnable = await getTimeoutData();
             return returnable;
         }
+        var handleLNURL = async lnurl => {
+            var url = brick_wallet.hexToText( nwcjs.bytesToHex( bech32.bech32.fromWords( bech32.bech32.decode( lnurl, 100_000 ).words ) ) );
+            var data = await fetch( url );
+            data = await data.json();
+            var tag = data[ "tag" ];
+            if ( tag !== "payRequest" ) return alert( `this type of lnurl is not supported by this wallet` );
+            var min = Math.floor( data[ "minSendable" ] / 1000 );
+            var max = Math.floor( data[ "maxSendable" ] / 1000 );
+            if ( isNaN( min ) || isNaN( max ) ) return alert( `the lnurl was invalid, try again` );
+            if ( !Number( min ) || !Number( max ) ) return alert( `the lnurl was invalid, try again` );
+            var html = `
+                <p>Enter an amount to send</p>
+                <p>Min: ${min.toLocaleString()} sats | Max: ${max.toLocaleString()} sats</p>
+                <p><input class="lnurlp_amnt"></p>
+                <p><button class="submit_lnurlp_form" onclick="sessionStorage[ 'lnurlp_amnt' ] = $( '.lnurlp_amnt' ).value;sessionStorage[ 'modal_cleared' ] = true;modalVanish();">Submit</button></p>
+            `;
+            sessionStorage.removeItem( "modal_cleared" );
+            var block_til_clear = true;
+            showModal( html, block_til_clear );
+            await getNote( "modal_cleared" );
+            var amount = Number( sessionStorage[ "lnurlp_amnt" ] ) * 1000;
+            var callback = data[ "callback" ] + "?amount=" + amount;
+            var invoice_data = await fetch( callback );
+            var {pr: invoice} = await invoice_data.json();
+            var skip_conf = true;
+            send( invoice, skip_conf );
+            $( '.wallet_body' ).classList.remove( "hidden" );
+            $( '.scanner_parent' ).classList.add( "hidden" );
+        }
     </script>
     <style>
         * {
@@ -355,6 +384,12 @@
                 }
                 return pmthash;
             },
+            hexToText: hex => {
+                var bytes = new Uint8Array( Math.ceil( hex.length / 2 ) );
+                for ( var i = 0; i < hex.length; i++ ) bytes[ i ] = parseInt( hex.substr( i * 2, 2 ), 16 );
+                var text = new TextDecoder().decode( bytes );
+                return text;
+            },
             init: async () => {
                 if ( brick_wallet.loaded ) await brick_wallet.waitSomeTime( 3000 );
                 if ( Object.keys( brick_wallet.state.history ).length ) {
@@ -585,6 +620,7 @@
                             html5QrCode.clear();
                         });
                     if ( decodedText.startsWith( "lightning:" ) || decodedText.startsWith( "LIGHTNING:" ) ) decodedText = decodedText.substring( 10 );
+                    if ( decodedText.startsWith( "lnurl" ) || decodedText.startsWith( "LNURL" ) ) return handleLNURL( decodedText );
                     if ( !decodedText.startsWith( "lnbc" ) && !decodedText.startsWith( "LNBC" ) ) return alert( `your invoice was invalid, try again` );
                     send( decodedText );
                 }
@@ -608,20 +644,29 @@
                     });
             }
             $( '.open_scanner' ).onclick = () => {scan();}
-            $( '.paste_invoice' ).onclick = () => {
+            $( '.paste_invoice' ).onclick = async () => {
+                try {
+                    html5QrCode
+                        .stop()
+                        .then( res => {
+                            html5QrCode.clear();
+                        });
+                } catch ( e ) {}
+                await brick_wallet.waitSomeTime( 10 );
                 var invoice = prompt( `enter the invoice you want to pay` );
+                if ( invoice.startsWith( "lnurl" ) || invoice.startsWith( "LNURL" ) ) return handleLNURL( invoice );
                 send( invoice );
                 $( '.wallet_body' ).classList.remove( "hidden" );
                 $( '.scanner_parent' ).classList.add( "hidden" );
-                html5QrCode
-                    .stop()
-                    .then( res => {
-                        html5QrCode.clear();
-                    });
             }
             $( '.enter_ln_address' ).onclick = async () => {
-                sessionStorage.removeItem( "modal_cleared" );
-                var block_til_clear = true;
+                try {
+                    html5QrCode
+                        .stop()
+                        .then( res => {
+                            html5QrCode.clear();
+                        });
+                } catch ( e ) {}
                 var html = `
                     <p>Enter a lightning address</p>
                     <p><input class="ln_addy_form"></p>
@@ -629,6 +674,8 @@
                     <p><input class="ln_addy_amnt"></p>
                     <p><button class="submit_ln_addy_form" onclick="sessionStorage[ 'ln_addy' ] = $( '.ln_addy_form' ).value;sessionStorage[ 'ln_addy_amnt' ] = $( '.ln_addy_amnt' ).value;sessionStorage[ 'modal_cleared' ] = true;modalVanish();">Submit</button></p>
                 `;
+                sessionStorage.removeItem( "modal_cleared" );
+                var block_til_clear = true;
                 showModal( html, block_til_clear );
                 await getNote( "modal_cleared" );
                 var lnaddy = sessionStorage[ "ln_addy" ];
@@ -638,13 +685,6 @@
                 sessionStorage.removeItem( "modal_cleared" );
                 $( '.wallet_body' ).classList.remove( "hidden" );
                 $( '.scanner_parent' ).classList.add( "hidden" );
-                try {
-                    html5QrCode
-                        .stop()
-                        .then( res => {
-                            html5QrCode.clear();
-                        });
-                } catch ( e ) {}
                 showModal( `<p>sending...</p>` );
                 var relays = [ "wss://nostrue.com" ];
                 var [ invoice ] = await nwcjs.getZapRequest( lnaddy, amount, relays );
