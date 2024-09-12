@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, user-scalable=no">
     <script src="https://cdn.jsdelivr.net/gh/mebjas/html5-qrcode@master/minified/html5-qrcode.min.js"></script>
     <script src="https://supertestnet.github.io/bitcoin-chess/js/qrcode.js"></script>
+    <script src="https://supertestnet.github.io/bitcoin-chess/js/bolt11.js"></script>
     <script src="https://supertestnet.github.io/nwcjs/nwcjs.js"></script>
     <script src="https://bundle.run/browserify-cipher@1.0.1"></script>
     <script src="https://bundle.run/noble-secp256k1@1.2.14"></script>
@@ -318,6 +319,13 @@
             },
             loaded: false,
             waitSomeTime: async milliseconds => new Promise( resolve => setTimeout( resolve, milliseconds ) ),
+            getInvoicePmthash: invoice => {
+                var decoded = bolt11.decode( invoice );
+                var i; for ( i=0; i<decoded[ "tags" ].length; i++ ) {
+                    if ( decoded[ "tags" ][ i ][ "tagName" ] == "payment_hash" ) var pmthash = decoded[ "tags" ][ i ][ "data" ].toString();
+                }
+                return pmthash;
+            },
             init: async () => {
                 if ( brick_wallet.loaded ) await brick_wallet.waitSomeTime( 3000 );
                 if ( Object.keys( brick_wallet.state.history ).length ) {
@@ -496,9 +504,12 @@
                     return showModal( `<p>${err_msg}</p>` );
                 }
                 if ( "result" in status && status[ "result" ] && "settled_at" in status[ "result" ] && status[ "result" ][ "settled_at" ] ) {
-                    var new_txs = {}
                     var new_tx = status[ "result" ];
+                    if ( new_tx[ "invoice" ] ) var payment_hash = brick_wallet.getInvoicePmthash( new_tx[ "invoice" ] );
+                    else var payment_hash = brick_wallet.getInvoicePmthash( new_tx[ "bolt11" ] );
+                    var new_txs = {}
                     new_tx[ "detail_hidden" ] = true;
+                    new_tx[ "payment_hash" ] = payment_hash;
                     new_txs[ new_tx[ "payment_hash" ] ] = new_tx;
                     brick_wallet.state.history = { ...new_txs, ...brick_wallet.state.history };
                     brick_wallet.parseHistory();
