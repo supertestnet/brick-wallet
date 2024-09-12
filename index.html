@@ -78,6 +78,17 @@
             margin: auto;
             word-wrap: break-word;
         }
+        button {
+            background-color: #77a8fc;
+            color: white;
+            font-weight: bold;
+            padding: .2rem;
+            width: 7rem;
+            font-size: 80%;
+        }
+        .hist_btn {
+            width: 2rem;
+        }
         .wallet_btns, .scanner_btns {
             display: flex;
             justify-content: space-between;
@@ -109,10 +120,10 @@
             user-select: none; /* Standard */
         }
         .arrow.incoming_arrow {
-            border: 1px solid green;
+            border: 1px solid #52b354;
         }
         .arrow.outgoing_arrow {
-            border: 1px solid red;
+            border: 1px solid #fc7777;
         }
         .tx_amt {
             -webkit-user-select: none; /* Safari */        
@@ -135,10 +146,10 @@
             cursor: pointer;
         }
         .incoming_tx {
-            color: green;
+            color: #52b354;
         }
         .outgoing_tx {
-            color: red;
+            color: #fc7777;
         }
         .hidable_tx_data {
             background-color: #cccccc;
@@ -155,7 +166,8 @@
             margin: .5rem 0;
         }
         .disconnect {
-            margin: 1rem;
+            margin: 1rem 0rem;
+            width: 100%;
         }
         .black-bg {
             width: 100%;
