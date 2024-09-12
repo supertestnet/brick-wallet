@@ -15,8 +15,9 @@
             $( ".black-bg" ).classList.add( "hidden" );
             $( ".modal" ).classList.add( "hidden" );
         }
-        var showModal = content => {
-            $( ".modal" ).innerHTML = `<div class="x_modal" style="position: absolute;right: 1rem;top: 0.5rem;font-size: 2rem; cursor: pointer; color: black;" onclick="modalVanish()">&times;</div>`;
+        var showModal = ( content, block_til_clear ) => {
+            if ( block_til_clear ) var fn = `modalVanish();sessionStorage[ 'modal_cleared' ] = true;`; else var fn = `modalVanish();`;
+            $( ".modal" ).innerHTML = `<div class="x_modal" style="position: absolute;right: 1rem;top: 0.5rem;font-size: 2rem; cursor: pointer; color: black;" onclick="${fn}">&times;</div>`;
             $( ".modal" ).innerHTML += `<div style="overflow-y: auto; max-height: 80vh; margin-top: 1.5rem;">${content}</div>`;
             $( ".black-bg" ).classList.remove( "hidden" );
             $( ".modal" ).classList.remove( "hidden" );
@@ -40,6 +41,27 @@
             dataUriPngImage.className = "qr_code";
             dataUriPngImage.style.width = "100%";
             return dataUriPngImage;
+        }
+        sessionStorage.removeItem( "modal_cleared" );
+        async function getNote( item ) {
+            async function isNoteSetYet( note_i_seek ) {
+                return new Promise( function( resolve, reject ) {
+                    if ( !note_i_seek ) {
+                        setTimeout( async function() {
+                            var msg = await isNoteSetYet( sessionStorage[ item ] );
+                            resolve( msg );
+                        }, 100 );
+                    } else {
+                        resolve( note_i_seek );
+                    }
+                });
+            }
+            async function getTimeoutData() {
+                var note_i_seek = await isNoteSetYet( sessionStorage[ item ] );
+                return note_i_seek;
+            }
+            var returnable = await getTimeoutData();
+            return returnable;
         }
     </script>
     <style>
@@ -74,14 +96,17 @@
         .hidden {
             display: none !important;
         }
-        .wallet_body {
+        .wallet_body, .scanner_parent {
             max-width: 15rem;
             margin: auto;
             word-wrap: break-word;
         }
+        .scanner_parent {
+            max-width: 30rem;
+        }
         button {
             background-color: #77a8fc;
-            color: white;
+            color: white !important;
             font-weight: bold;
             padding: .2rem;
             width: 7rem;
@@ -95,7 +120,11 @@
         }
         .wallet_btns, .scanner_btns {
             display: flex;
-            justify-content: space-between;
+            flex-wrap: wrap;
+            justify-content: space-around;
+        }
+        .scanner_btns button {
+            margin: .5rem;
         }
         .invoice_box {
             margin-top: 1rem;
@@ -291,7 +320,7 @@
 <body>
     <div class="scanner_parent hidden">
         <div id="scanner"></div>
-        <p class="scanner_btns"><button class="paste_invoice">Paste invoice</button> <button class="cancel_scanner">Cancel</button></p>
+        <p class="scanner_btns"><button class="paste_invoice">Paste invoice</button><button class="cancel_scanner">Cancel</button><button class="close_scanner">Close scanner</button><button class="open_scanner hidden">Open scanner</button><button class="enter_ln_address">Enter LN address</button></p>
     </div>
     <div class="wallet_body">
         <center><p class="balance" style="font-weight: bold;">loading balance...</p></center></h1>
@@ -352,7 +381,7 @@
                         if ( !brick_wallet.state.offset ) $( '.hist_back' ).disabled = true;
                         brick_wallet.parseHistory();
                     }
-                    brick_wallet.parseHistory();
+                    if ( !brick_wallet.loaded ) brick_wallet.parseHistory();
                 } else {
                     if ( brick_wallet.loaded ) $( '.history' ).innerText = 'No history';
                 }
@@ -380,6 +409,14 @@
                     });
                     brick_wallet.state.history = { ...new_txs, ...brick_wallet.state.history };
                     brick_wallet.state.last_tx = txs.result.transactions[ 0 ].created_at + 1;
+                    brick_wallet.parseHistory();
+                    var sum = 0;
+                    Object.keys( brick_wallet.state.history ).forEach( txid => {
+                        var tx = brick_wallet.state.history[ txid ];
+                        if ( tx.type === "incoming" ) sum = sum + tx[ "amount" ];
+                        else sum = sum - ( tx[ "amount" ] + tx[ "fees_paid" ] );
+                    });
+                    $( '.balance' ).innerText = Math.floor( sum / 1000 ) + " sats";
                 }
                 brick_wallet.init();
             },
@@ -410,7 +447,7 @@
                     var desc_div = `
                         <div class="tx_detail_big">
                             <p style="font-weight: bold;">Description</p>
-                            <p>${tx[ "description" ] || "[No description]"}</p>
+                            <p class="desc_div"></p>
                         </div>
                     `;
                     var pmthash_div = "";
@@ -466,7 +503,14 @@
                     `;
                     html = html + txdata;
                 });
-                $( '.history' ).innerHTML = html;
+                var div = document.createElement( "div" );
+                div.innerHTML = html;
+                history.forEach( ( tx, index ) => {
+                    if ( !tx ) return;
+                    div.getElementsByClassName( "desc_div" )[ index ].innerText = tx[ "description" ] || "[No description]"
+                });
+                $( '.history' ).innerHTML = '';
+                $( '.history' ).append( div );
                 $$( '.clickable_tx' ).forEach( item => {
                     item.onclick = () => {
                         var parent = item.parentElement;
@@ -485,10 +529,10 @@
         }
     </script>
     <script>
-        var send = async invoice => {
+        var send = async ( invoice, skip_conf ) => {
             var conf = true;
             if ( !invoice ) invoice = prompt( `enter the invoice you want to pay` );
-            else conf = confirm( `Are you sure you want to pay that invoice?` );
+            else if ( !skip_conf ) conf = confirm( `Are you sure you want to pay that invoice?` );
             if ( !conf ) return;
             var amnt = null;
             $( '.invoice_box' ).innerText = invoice;
@@ -526,6 +570,8 @@
         var scan = () => {
             $( '.wallet_body' ).classList.add( "hidden" );
             $( '.scanner_parent' ).classList.remove( "hidden" );
+            $( '.open_scanner' ).classList.add( "hidden" );
+            $( '.close_scanner' ).classList.remove( "hidden" );
             var html5QrCode = new Html5Qrcode( "scanner" );
             html5QrCode.start(
                 { facingMode: "environment" },
@@ -552,6 +598,16 @@
                         html5QrCode.clear();
                     });
             }
+            $( '.close_scanner' ).onclick = () => {
+                $( '.open_scanner' ).classList.remove( "hidden" );
+                $( '.close_scanner' ).classList.add( "hidden" );
+                html5QrCode
+                    .stop()
+                    .then( res => {
+                        html5QrCode.clear();
+                    });
+            }
+            $( '.open_scanner' ).onclick = () => {scan();}
             $( '.paste_invoice' ).onclick = () => {
                 var invoice = prompt( `enter the invoice you want to pay` );
                 send( invoice );
@@ -562,6 +618,38 @@
                     .then( res => {
                         html5QrCode.clear();
                     });
+            }
+            $( '.enter_ln_address' ).onclick = async () => {
+                sessionStorage.removeItem( "modal_cleared" );
+                var block_til_clear = true;
+                var html = `
+                    <p>Enter a lightning address</p>
+                    <p><input class="ln_addy_form"></p>
+                    <p>Enter how many sats to send there</p>
+                    <p><input class="ln_addy_amnt"></p>
+                    <p><button class="submit_ln_addy_form" onclick="sessionStorage[ 'ln_addy' ] = $( '.ln_addy_form' ).value;sessionStorage[ 'ln_addy_amnt' ] = $( '.ln_addy_amnt' ).value;sessionStorage[ 'modal_cleared' ] = true;modalVanish();">Submit</button></p>
+                `;
+                showModal( html, block_til_clear );
+                await getNote( "modal_cleared" );
+                var lnaddy = sessionStorage[ "ln_addy" ];
+                var amount = Number( sessionStorage[ "ln_addy_amnt" ] );
+                sessionStorage.removeItem( "ln_addy" );
+                sessionStorage.removeItem( "ln_addy_amnt" );
+                sessionStorage.removeItem( "modal_cleared" );
+                $( '.wallet_body' ).classList.remove( "hidden" );
+                $( '.scanner_parent' ).classList.add( "hidden" );
+                try {
+                    html5QrCode
+                        .stop()
+                        .then( res => {
+                            html5QrCode.clear();
+                        });
+                } catch ( e ) {}
+                showModal( `<p>sending...</p>` );
+                var relays = [ "wss://nostrue.com" ];
+                var [ invoice ] = await nwcjs.getZapRequest( lnaddy, amount, relays );
+                var skip_conf = true;
+                send( invoice, skip_conf );
             }
         }
         $( '.send' ).onclick = () => {scan()};
@@ -623,9 +711,14 @@
             walletSaver();
         }
         walletSaver();
+        brick_wallet.state.offset = 0;
+        Object.keys( brick_wallet.state.history ).forEach( txid => {
+            var tx = brick_wallet.state.history[ txid ];
+            if ( !tx[ "detail_hidden" ] ) tx[ "detail_hidden" ] = true;
+        });
         brick_wallet.init();
     </script>
-    <div class="black-bg hidden" onclick="modalVanish();"></div>
+    <div class="black-bg hidden"></div>
     <div class="modal hidden"></div>
     <div class="toast"></div>
 </body>
