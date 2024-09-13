@@ -788,6 +788,8 @@
                         .then( res => {
                             html5QrCode.clear();
                         });
+                    $( '.open_send_scanner' ).classList.remove( "hidden" );
+                    $( '.close_send_scanner' ).classList.add( "hidden" );
                     if ( decodedText.startsWith( "lightning:" ) || decodedText.startsWith( "LIGHTNING:" ) ) decodedText = decodedText.substring( 10 );
                     if ( decodedText.startsWith( "lnurl" ) || decodedText.startsWith( "LNURL" ) ) {
                         var url = brick_wallet.hexToText( nwcjs.bytesToHex( bech32.bech32.fromWords( bech32.bech32.decode( decodedText, 100_000 ).words ) ) );
@@ -992,6 +994,8 @@
                         .then( res => {
                             html5QrCode.clear();
                         });
+                    $( '.open_receive_scanner' ).classList.remove( "hidden" );
+                    $( '.close_receive_scanner' ).classList.add( "hidden" );
                     var conf = true;
                     if ( decodedText.startsWith( "lightning:" ) || decodedText.startsWith( "LIGHTNING:" ) ) {
                         decodedText = decodedText.substring( 10 );
