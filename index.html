@@ -974,10 +974,14 @@
                     var conf = true;
                     if ( decodedText.startsWith( "lightning:" ) || decodedText.startsWith( "LIGHTNING:" ) ) {
                         decodedText = decodedText.substring( 10 );
-                        if ( !decodedText.startsWith( "lnbc" ) && !decodedText.startsWith( "LNBC" ) ) return alert( `your invoice was invalid, try again` );
-                        conf = confirm( `That is a lightning invoice, meaning you will "send" money, not receive it. Click ok if that is what you want, otherwise click cancel` );
-                        if ( !conf ) return;
-                        send( decodedText );
+                        if ( !decodedText.startsWith( "lnbc" ) && !decodedText.startsWith( "LNBC" ) && !decodedText.startsWith( "lnurl" ) && !decodedText.startsWith( "LNURL" ) ) return alert( `your invoice was invalid, try again` );
+                        var skip = false;
+                        if ( decodedText.startsWith( "lnurl" ) || decodedText.startsWith( "LNURL" ) ) skip = true;
+                        if ( !skip ) {
+                            conf = confirm( `That is a lightning invoice, meaning you will "send" money, not receive it. Click ok if that is what you want, otherwise click cancel` );
+                            if ( !conf ) return;
+                            send( decodedText );
+                        }
                     }
                     if ( decodedText.startsWith( "lnurl" ) || decodedText.startsWith( "LNURL" ) ) {
                         var url = brick_wallet.hexToText( nwcjs.bytesToHex( bech32.bech32.fromWords( bech32.bech32.decode( decodedText, 100_000 ).words ) ) );
