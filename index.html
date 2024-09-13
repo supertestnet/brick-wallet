@@ -154,7 +154,7 @@
                     if ( !$( '.modal' ).classList.contains( "hidden" ) ) {
                         showModal( "<p>success</p>" );
                         await brick_wallet.waitSomeTime( 1000 );
-                        if ( $( '.x_modal' ) ) $( '.x_modal' ).click();
+                        if ( !$( '.modal' ).classList.contains( "hidden" ) ) $( '.x_modal' ).click();
                     }
                     brick_wallet.parseHistory();
                     var sum = 0;
@@ -732,7 +732,7 @@
                     if ( $( '.modal' ).classList.contains( "hidden" ) ) return;
                     showModal( "<p>paid</p>" );
                     await brick_wallet.waitSomeTime( 1000 );
-                    if ( $( '.x_modal' ) ) $( '.x_modal' ).click();
+                    if ( !$( '.modal' ).classList.contains( "hidden" ) ) $( '.x_modal' ).click();
                     return;
                 }
                 await brick_wallet.waitSomeTime( 2000 );
@@ -758,13 +758,20 @@
             if ( String( amnt ).startsWith( "lnurl" ) || String( amnt ).startsWith( "LNURL" ) ) {
                 var decodedText = String( amnt );
                 var url = brick_wallet.hexToText( nwcjs.bytesToHex( bech32.bech32.fromWords( bech32.bech32.decode( decodedText, 100_000 ).words ) ) );
+                showModal( `<p>processing...</p>` );
                 var data = await fetch( url );
                 data = await data.json();
                 var tag = data[ "tag" ];
-                if ( tag !== "payRequest" && tag !== "withdrawRequest" ) return alert( `this type of lnurl is not supported by this wallet` );
+                if ( tag !== "payRequest" && tag !== "withdrawRequest" ) {
+                    if ( !$( '.modal' ).classList.contains( "hidden" ) ) $( '.x_modal' ).click();
+                    return alert( `this type of lnurl is not supported by this wallet` );
+                }
                 var conf = true;
                 if ( tag === "payRequest" ) conf = confirm( `That is an lnurl "paycode," meaning you will "send" money, not receive it. Click ok if that is what you want, otherwise click cancel` );
-                if ( !conf ) return;
+                if ( !conf ) {
+                    if ( !$( '.modal' ).classList.contains( "hidden" ) ) $( '.x_modal' ).click();
+                    return;
+                }
                 return handleLNURLdata( data );
             }
             receive( amnt );
@@ -785,13 +792,20 @@
                     if ( decodedText.startsWith( "lightning:" ) || decodedText.startsWith( "LIGHTNING:" ) ) decodedText = decodedText.substring( 10 );
                     if ( decodedText.startsWith( "lnurl" ) || decodedText.startsWith( "LNURL" ) ) {
                         var url = brick_wallet.hexToText( nwcjs.bytesToHex( bech32.bech32.fromWords( bech32.bech32.decode( decodedText, 100_000 ).words ) ) );
+                        showModal( '<p>processing...</p>' );
                         var data = await fetch( url );
                         data = await data.json();
                         var tag = data[ "tag" ];
-                        if ( tag !== "payRequest" && tag !== "withdrawRequest" ) return alert( `this type of lnurl is not supported by this wallet` );
+                        if ( tag !== "payRequest" && tag !== "withdrawRequest" ) {
+                            if ( !$( '.modal' ).classList.contains( "hidden" ) ) $( '.x_modal' ).click();
+                            return alert( `this type of lnurl is not supported by this wallet` );
+                        }
                         var conf = true;
                         if ( tag === "withdrawRequest" ) conf = confirm( `That is an lnurl "withdraw code," meaning you will "receive" money, not send it. Click ok if that is what you want, otherwise click cancel` );
-                        if ( !conf ) return;
+                        if ( !conf ) {
+                            if ( !$( '.modal' ).classList.contains( "hidden" ) ) $( '.x_modal' ).click();
+                            return;
+                        }
                         return handleLNURLdata( data );
                     }
                     if ( !decodedText.startsWith( "lnbc" ) && !decodedText.startsWith( "LNBC" ) ) return alert( `your invoice was invalid, try again` );
@@ -845,13 +859,20 @@
                 if ( !invoice ) return;
                 if ( invoice.startsWith( "lnurl" ) || invoice.startsWith( "LNURL" ) ) {
                     var url = brick_wallet.hexToText( nwcjs.bytesToHex( bech32.bech32.fromWords( bech32.bech32.decode( invoice, 100_000 ).words ) ) );
+                    showModal( '<p>processing...</p>' );
                     var data = await fetch( url );
                     data = await data.json();
                     var tag = data[ "tag" ];
-                    if ( tag !== "payRequest" && tag !== "withdrawRequest" ) return alert( `this type of lnurl is not supported by this wallet` );
+                    if ( tag !== "payRequest" && tag !== "withdrawRequest" ) {
+                        if ( !$( '.modal' ).classList.contains( "hidden" ) ) $( '.x_modal' ).click();
+                        return alert( `this type of lnurl is not supported by this wallet` );
+                    }
                     var conf = true;
                     if ( tag === "withdrawRequest" ) conf = confirm( `That is an lnurl "withdraw code," meaning you will "receive" money, not send it. Click ok if that is what you want, otherwise click cancel` );
-                    if ( !conf ) return;
+                    if ( !conf ) {
+                        if ( !$( '.modal' ).classList.contains( "hidden" ) ) $( '.x_modal' ).click();
+                        return;
+                    }
                     return handleLNURLdata( data );
                 }
                 send( invoice );
@@ -950,7 +971,7 @@
                 if ( $( '.modal' ).classList.contains( "hidden" ) ) return;
                 showModal( "<p>paid</p>" );
                 await brick_wallet.waitSomeTime( 1000 );
-                if ( $( '.x_modal' ) ) $( '.x_modal' ).click();
+                if ( !$( '.modal' ).classList.contains( "hidden" ) ) $( '.x_modal' ).click();
                 return true;
             }
             var paid = await loop();
@@ -987,13 +1008,20 @@
                     }
                     if ( decodedText.startsWith( "lnurl" ) || decodedText.startsWith( "LNURL" ) ) {
                         var url = brick_wallet.hexToText( nwcjs.bytesToHex( bech32.bech32.fromWords( bech32.bech32.decode( decodedText, 100_000 ).words ) ) );
+                        showModal( '<p>processing...</p>' );
                         var data = await fetch( url );
                         data = await data.json();
                         var tag = data[ "tag" ];
-                        if ( tag !== "payRequest" && tag !== "withdrawRequest" ) return alert( `this type of lnurl is not supported by this wallet` );
+                        if ( tag !== "payRequest" && tag !== "withdrawRequest" ) {
+                            if ( !$( '.modal' ).classList.contains( "hidden" ) ) $( '.x_modal' ).click();
+                            return alert( `this type of lnurl is not supported by this wallet` );
+                        }
                         var conf = true;
                         if ( tag === "payRequest" ) conf = confirm( `That is an lnurl "paycode," meaning you will "send" money, not receive it. Click ok if that is what you want, otherwise click cancel` );
-                        if ( !conf ) return;
+                        if ( !conf ) {
+                            if ( !$( '.modal' ).classList.contains( "hidden" ) ) $( '.x_modal' ).click();
+                            return;
+                        }
                         return handleLNURLdata( data );
                     }
                 }
