@@ -93,6 +93,7 @@
                 sessionStorage.removeItem( "modal_cleared" );
                 var amount = Number( sessionStorage[ "lnurlp_amnt" ] ) * 1000;
                 sessionStorage.removeItem( "lnurlp_amnt" );
+                if ( !amount ) return;
                 var callback = data[ "callback" ] + "?amount=" + amount;
                 var invoice_data = await fetch( callback );
                 var {pr: invoice} = await invoice_data.json();
@@ -119,6 +120,7 @@
                 sessionStorage.removeItem( "modal_cleared" );
                 var amnt = Number( sessionStorage[ "lnurlw_amnt" ] );
                 sessionStorage.removeItem( "lnurlw_amnt" );
+                if ( !amnt ) return;
                 showModal( `<p>processing...</p>` );
                 var desc = "NWC Wallet";
                 var delay_tolerance = 10;
