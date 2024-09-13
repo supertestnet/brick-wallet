@@ -79,9 +79,15 @@
                 var max = Math.floor( data[ "maxSendable" ] / 1000 );
                 if ( isNaN( min ) || isNaN( max ) ) return alert( `the lnurl was invalid, try again` );
                 if ( !Number( min ) || !Number( max ) ) return alert( `the lnurl was invalid, try again` );
+                var sum = 0;
+                Object.keys( brick_wallet.state.history ).forEach( txid => {
+                    var tx = brick_wallet.state.history[ txid ];
+                    if ( tx.type === "incoming" ) sum = sum + tx[ "amount" ];
+                    else sum = sum - ( tx[ "amount" ] + tx[ "fees_paid" ] );
+                });
                 var html = `
                     <p>Enter an amount to send</p>
-                    <p>Min: ${min.toLocaleString()} sats | Max: ${max.toLocaleString()} sats</p>
+                    <p>Min: ${min.toLocaleString()} sats | Max: ${Math.max( max, sum ).toLocaleString()} sats</p>
                     <p><input class="lnurlp_amnt"></p>
                     <p><button class="submit_lnurlp_form" onclick="sessionStorage[ 'lnurlp_amnt' ] = $( '.lnurlp_amnt' ).value;sessionStorage[ 'modal_cleared' ] = true;modalVanish();">Submit</button></p>
                 `;
