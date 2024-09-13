@@ -87,7 +87,7 @@
                 });
                 var html = `
                     <p>Enter an amount to send</p>
-                    <p>Min: ${min.toLocaleString()} sats | Max: ${Math.max( max, sum ).toLocaleString()} sats</p>
+                    <p>Min: ${min.toLocaleString()} sats | Max: ${Math.min( max, sum ).toLocaleString()} sats</p>
                     <p><input class="lnurlp_amnt"></p>
                     <p><button class="submit_lnurlp_form" onclick="sessionStorage[ 'lnurlp_amnt' ] = $( '.lnurlp_amnt' ).value;sessionStorage[ 'modal_cleared' ] = true;modalVanish();">Submit</button></p>
                 `;
