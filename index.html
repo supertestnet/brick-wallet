@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, user-scalable=no">
+    <title>Brick Wallet</title>
     <link rel="shortcut icon" type="image/x-icon" href="https://supertestnet.github.io/brick-wallet/favicon.ico">
     <script src="https://cdn.jsdelivr.net/gh/mebjas/html5-qrcode@master/minified/html5-qrcode.min.js"></script>
     <script src="https://supertestnet.github.io/bitcoin-chess/js/qrcode.js"></script>
@@ -43,6 +44,13 @@
             dataUriPngImage.style.width = "100%";
             return dataUriPngImage;
         }
+        sessionStorage.removeItem( "lnurlp_amnt" );
+        sessionStorage.removeItem( "lnurlw_amnt" );
+        sessionStorage.removeItem( "ln_addy" );
+        sessionStorage.removeItem( "ln_addy_amnt" );
+        sessionStorage.removeItem( "yes_send" );
+        sessionStorage.removeItem( "ln_invoice" );
+        sessionStorage.removeItem( "nwc_string" );
         sessionStorage.removeItem( "modal_cleared" );
         async function getNote( item ) {
             async function isNoteSetYet( note_i_seek ) {
@@ -64,34 +72,109 @@
             var returnable = await getTimeoutData();
             return returnable;
         }
-        var handleLNURL = async lnurl => {
-            var url = brick_wallet.hexToText( nwcjs.bytesToHex( bech32.bech32.fromWords( bech32.bech32.decode( lnurl, 100_000 ).words ) ) );
-            var data = await fetch( url );
-            data = await data.json();
+        var handleLNURLdata = async data => {
             var tag = data[ "tag" ];
-            if ( tag !== "payRequest" ) return alert( `this type of lnurl is not supported by this wallet` );
-            var min = Math.floor( data[ "minSendable" ] / 1000 );
-            var max = Math.floor( data[ "maxSendable" ] / 1000 );
-            if ( isNaN( min ) || isNaN( max ) ) return alert( `the lnurl was invalid, try again` );
-            if ( !Number( min ) || !Number( max ) ) return alert( `the lnurl was invalid, try again` );
-            var html = `
-                <p>Enter an amount to send</p>
-                <p>Min: ${min.toLocaleString()} sats | Max: ${max.toLocaleString()} sats</p>
-                <p><input class="lnurlp_amnt"></p>
-                <p><button class="submit_lnurlp_form" onclick="sessionStorage[ 'lnurlp_amnt' ] = $( '.lnurlp_amnt' ).value;sessionStorage[ 'modal_cleared' ] = true;modalVanish();">Submit</button></p>
-            `;
-            sessionStorage.removeItem( "modal_cleared" );
-            var block_til_clear = true;
-            showModal( html, block_til_clear );
-            await getNote( "modal_cleared" );
-            var amount = Number( sessionStorage[ "lnurlp_amnt" ] ) * 1000;
-            var callback = data[ "callback" ] + "?amount=" + amount;
-            var invoice_data = await fetch( callback );
-            var {pr: invoice} = await invoice_data.json();
-            var skip_conf = true;
-            send( invoice, skip_conf );
-            $( '.wallet_body' ).classList.remove( "hidden" );
-            $( '.scanner_parent' ).classList.add( "hidden" );
+            if ( tag === "payRequest" ) {
+                var min = Math.floor( data[ "minSendable" ] / 1000 );
+                var max = Math.floor( data[ "maxSendable" ] / 1000 );
+                if ( isNaN( min ) || isNaN( max ) ) return alert( `the lnurl was invalid, try again` );
+                if ( !Number( min ) || !Number( max ) ) return alert( `the lnurl was invalid, try again` );
+                var html = `
+                    <p>Enter an amount to send</p>
+                    <p>Min: ${min.toLocaleString()} sats | Max: ${max.toLocaleString()} sats</p>
+                    <p><input class="lnurlp_amnt"></p>
+                    <p><button class="submit_lnurlp_form" onclick="sessionStorage[ 'lnurlp_amnt' ] = $( '.lnurlp_amnt' ).value;sessionStorage[ 'modal_cleared' ] = true;modalVanish();">Submit</button></p>
+                `;
+                sessionStorage.removeItem( "lnurlp_amnt" );
+                sessionStorage.removeItem( "modal_cleared" );
+                var block_til_clear = true;
+                showModal( html, block_til_clear );
+                await getNote( "modal_cleared" );
+                sessionStorage.removeItem( "modal_cleared" );
+                var amount = Number( sessionStorage[ "lnurlp_amnt" ] ) * 1000;
+                sessionStorage.removeItem( "lnurlp_amnt" );
+                var callback = data[ "callback" ] + "?amount=" + amount;
+                var invoice_data = await fetch( callback );
+                var {pr: invoice} = await invoice_data.json();
+                var skip_conf = true;
+                send( invoice, skip_conf );
+                showPage( 'wallet_body' );
+            }
+            if ( tag === "withdrawRequest" ) {
+                var min = Math.floor( data[ "minWithdrawable" ] / 1000 );
+                var max = Math.floor( data[ "maxWithdrawable" ] / 1000 );
+                if ( isNaN( min ) || isNaN( max ) ) return alert( `the lnurl was invalid, try again` );
+                if ( !Number( min ) || !Number( max ) ) return alert( `the lnurl was invalid, try again` );
+                var html = `
+                    <p>Enter an amount to withdraw</p>
+                    <p>Min: ${min.toLocaleString()} sats | Max: ${max.toLocaleString()} sats</p>
+                    <p><input class="lnurlw_amnt"></p>
+                    <p><button class="submit_lnurlw_form" onclick="sessionStorage[ 'lnurlw_amnt' ] = $( '.lnurlw_amnt' ).value;sessionStorage[ 'modal_cleared' ] = true;modalVanish();">Submit</button></p>
+                `;
+                sessionStorage.removeItem( "lnurlw_amnt" );
+                sessionStorage.removeItem( "modal_cleared" );
+                var block_til_clear = true;
+                showModal( html, block_til_clear );
+                await getNote( "modal_cleared" );
+                sessionStorage.removeItem( "modal_cleared" );
+                var amnt = Number( sessionStorage[ "lnurlw_amnt" ] );
+                sessionStorage.removeItem( "lnurlw_amnt" );
+                showModal( `<p>processing...</p>` );
+                var desc = "NWC Wallet";
+                var delay_tolerance = 10;
+                var invoice_info = await nwcjs.makeInvoice( brick_wallet.state.nwc_info, amnt, desc, delay_tolerance );
+                if ( "result_type" in invoice_info && invoice_info[ "result_type" ] !== "make_invoice" ) return alert( `your wallet encountered an undefined error while processing this withdraw code, try again` );
+                if ( "error" in invoice_info && invoice_info[ "error" ] ) return alert( `error processing your withdraw code: ${JSON.stringify( invoice_info[ "error" ] )} -- please try again` );
+                var invoice = invoice_info.result.invoice;
+                $( '.invoice_box' ).innerText = invoice;
+                var loop = async () => {
+                    await brick_wallet.waitSomeTime( 3000 );
+                    var delay_tolerance = 10;
+                    var status_info = await nwcjs.checkInvoice( brick_wallet.state.nwc_info, invoice, delay_tolerance );
+                    if ( "error" in status_info && status_info[ "error" ] ) return alert( `error checking the status of your withdrawal: ${JSON.stringify( status_info[ "error" ] )} -- please refresh your page` );
+                    if ( !status_info.result.settled_at ) return loop();
+                    var new_tx = status_info[ "result" ];
+                    if ( new_tx[ "invoice" ] ) var payment_hash = brick_wallet.getInvoicePmthash( new_tx[ "invoice" ] );
+                    else var payment_hash = brick_wallet.getInvoicePmthash( new_tx[ "bolt11" ] );
+                    var new_txs = {}
+                    new_tx[ "detail_hidden" ] = true;
+                    new_tx[ "payment_hash" ] = payment_hash;
+                    new_txs[ new_tx[ "payment_hash" ] ] = new_tx;
+                    brick_wallet.state.history = { ...new_txs, ...brick_wallet.state.history };
+                    brick_wallet.parseHistory();
+                    var sum = 0;
+                    Object.keys( brick_wallet.state.history ).forEach( txid => {
+                        var tx = brick_wallet.state.history[ txid ];
+                        if ( tx.type === "incoming" ) sum = sum + tx[ "amount" ];
+                        else sum = sum - ( tx[ "amount" ] + tx[ "fees_paid" ] );
+                    });
+                    $( '.balance' ).innerText = Math.floor( sum / 1000 ) + " sats";
+                    if ( !$( '.modal' ).classList.contains( "hidden" ) ) {
+                        showModal( "<p>success</p>" );
+                        await brick_wallet.waitSomeTime( 1000 );
+                        if ( $( '.x_modal' ) ) $( '.x_modal' ).click();
+                    }
+                    brick_wallet.parseHistory();
+                    var sum = 0;
+                    Object.keys( brick_wallet.state.history ).forEach( txid => {
+                        var tx = brick_wallet.state.history[ txid ];
+                        if ( tx.type === "incoming" ) sum = sum + tx[ "amount" ];
+                        else sum = sum - ( tx[ "amount" ] + tx[ "fees_paid" ] );
+                    });
+                    $( '.balance' ).innerText = Math.floor( sum / 1000 ) + " sats";
+                    showPage( 'wallet_body' );
+                    return true;
+                }
+                loop();
+                var callback = data[ "callback" ] + "?pr=" + invoice + "&k1=" + data[ "k1" ];
+                var withdraw_data = await fetch( callback );
+                try {
+                    var {status: success} = await withdraw_data.json();
+                    if ( !success || success !== "OK" ) alert( `There was an unknown problem processing your withdrawal, please try again` );
+                } catch ( e ) {
+                    alert( `There was an unknown problem processing your withdrawal, please try again` );
+                }
+            }
         }
     </script>
     <style>
@@ -126,12 +209,12 @@
         .hidden {
             display: none !important;
         }
-        .wallet_body, .scanner_parent {
+        .wallet_body, .send_page, .receive_page {
             max-width: 15rem;
             margin: auto;
             word-wrap: break-word;
         }
-        .scanner_parent {
+        .send_page, .receive_page {
             max-width: 30rem;
         }
         button {
@@ -148,12 +231,12 @@
         .hist_btn:disabled {
             background-color: #cccccc;
         }
-        .wallet_btns, .scanner_btns {
+        .wallet_btns, .send_scanner_btns, .receive_scanner_btns {
             display: flex;
             flex-wrap: wrap;
             justify-content: space-around;
         }
-        .scanner_btns button {
+        .send_scanner_btns button, .receive_scanner_btns button {
             margin: .5rem;
         }
         .invoice_box {
@@ -348,9 +431,17 @@
 </script>
 </head>
 <body>
-    <div class="scanner_parent hidden">
-        <div id="scanner"></div>
-        <p class="scanner_btns"><button class="paste_invoice">Paste invoice</button><button class="cancel_scanner">Cancel</button><button class="close_scanner">Close scanner</button><button class="open_scanner hidden">Open scanner</button><button class="enter_ln_address">Enter LN address</button></p>
+    <div class="send_page hidden">
+        <div id="send_scanner"></div>
+        <p class="send_scanner_btns"><button class="paste_invoice">Paste invoice</button><button class="cancel_send_scanner">Cancel</button><button class="close_send_scanner">Close scanner</button><button class="open_send_scanner hidden">Open scanner</button><button class="enter_ln_address">Enter LN address</button></p>
+    </div>
+    <div class="receive_page hidden">
+        <div id="receive_scanner"></div>
+        <div class="receive_form">
+            <p>Enter the amount you want to receive or paste an lnurl withdraw code</p>
+            <p><input class="receive_amnt"></p>
+        </div>
+        <p class="receive_scanner_btns"><button class="submit_receive_form">Submit</button><button class="cancel_receive">Cancel</button><button class="close_receive_scanner hidden">Close scanner</button><button class="open_receive_scanner">Open scanner</button></p>
     </div>
     <div class="wallet_body">
         <center><p class="balance" style="font-weight: bold;">loading balance...</p></center></h1>
@@ -394,29 +485,6 @@
             init: async () => {
                 if ( brick_wallet.loaded ) await brick_wallet.waitSomeTime( 3000 );
                 if ( Object.keys( brick_wallet.state.history ).length ) {
-                    $( '.hist_btns' ).classList.remove( "hidden" );
-                    var len_of_hist = Object.keys( brick_wallet.state.history ).length;
-                    if ( ( brick_wallet.state.offset + 1 ) * 5 >= len_of_hist ) $( '.hist_fwd' ).disabled = true;
-                    else $( '.hist_fwd' ).disabled = false;
-                    if ( !brick_wallet.state.offset ) $( '.hist_back' ).disabled = true;
-                    else $( '.hist_back' ).disabled = false;
-                    if ( brick_wallet.state.offset < 0 ) brick_wallet.state.offset = 0;
-                    $( '.hist_fwd' ).onclick = () => {
-                        if ( $( '.hist_fwd' ).disabled ) return;
-                        var len_of_hist = Object.keys( brick_wallet.state.history ).length;
-                        if ( ( brick_wallet.state.offset + 2 ) * 5 >= len_of_hist ) $( '.hist_fwd' ).disabled = true;
-                        $( '.hist_back' ).disabled = false;
-                        brick_wallet.state.offset = brick_wallet.state.offset + 1;
-                        brick_wallet.parseHistory();
-                    }
-                    $( '.hist_back' ).onclick = () => {
-                        if ( $( '.hist_back' ).disabled ) return;
-                        $( '.hist_fwd' ).disabled = false;
-                        brick_wallet.state.offset = brick_wallet.state.offset - 1;
-                        if ( brick_wallet.state.offset < 0 ) brick_wallet.state.offset = 0;
-                        if ( !brick_wallet.state.offset ) $( '.hist_back' ).disabled = true;
-                        brick_wallet.parseHistory();
-                    }
                     if ( !brick_wallet.loaded ) brick_wallet.parseHistory();
                 } else {
                     if ( brick_wallet.loaded ) $( '.history' ).innerText = 'No history';
@@ -424,8 +492,22 @@
                 brick_wallet.loaded = true;
                 if ( !brick_wallet.state.nwc_string ) {
                     localStorage.clear();
-                    brick_wallet.state.nwc_string = prompt( `please enter an NWC string with full permissions` );
+                    var html = `
+                        <p>Please enter an NWC string with full permissions</p>
+                        <p><input class="nwc_string_form"></p>
+                        <p><button class="submit_nwc_string_form" onclick="sessionStorage[ 'nwc_string' ] = $( '.nwc_string_form' ).value;sessionStorage[ 'modal_cleared' ] = true;modalVanish();">Submit</button></p>
+                    `;
+                    sessionStorage.removeItem( "nwc_string" );
+                    sessionStorage.removeItem( "modal_cleared" );
+                    var block_til_clear = true;
+                    showModal( html, block_til_clear );
+                    await getNote( "modal_cleared" );
+                    sessionStorage.removeItem( "modal_cleared" );
+                    brick_wallet.state.nwc_string = sessionStorage[ "nwc_string" ];
+                    sessionStorage.removeItem( "nwc_string" );
+                    // brick_wallet.state.nwc_string = prompt( `please enter an NWC string with full permissions` );
                 }
+                if ( !brick_wallet.state.nwc_string ) return;
                 brick_wallet.state.nwc_info = nwcjs.processNWCstring( brick_wallet.state.nwc_string );
                 var sum = 0;
                 Object.keys( brick_wallet.state.history ).forEach( txid => {
@@ -464,6 +546,31 @@
                 history.splice( 0, remove_before );
                 history.length = 5;
                 var html = ``;
+                if ( history.length ) {
+                    $( '.hist_btns' ).classList.remove( "hidden" );
+                    var len_of_hist = Object.keys( brick_wallet.state.history ).length;
+                    if ( ( brick_wallet.state.offset + 1 ) * 5 >= len_of_hist ) $( '.hist_fwd' ).disabled = true;
+                    else $( '.hist_fwd' ).disabled = false;
+                    if ( !brick_wallet.state.offset ) $( '.hist_back' ).disabled = true;
+                    else $( '.hist_back' ).disabled = false;
+                    if ( brick_wallet.state.offset < 0 ) brick_wallet.state.offset = 0;
+                    $( '.hist_fwd' ).onclick = () => {
+                        if ( $( '.hist_fwd' ).disabled ) return;
+                        var len_of_hist = Object.keys( brick_wallet.state.history ).length;
+                        if ( ( brick_wallet.state.offset + 2 ) * 5 >= len_of_hist ) $( '.hist_fwd' ).disabled = true;
+                        $( '.hist_back' ).disabled = false;
+                        brick_wallet.state.offset = brick_wallet.state.offset + 1;
+                        brick_wallet.parseHistory();
+                    }
+                    $( '.hist_back' ).onclick = () => {
+                        if ( $( '.hist_back' ).disabled ) return;
+                        $( '.hist_fwd' ).disabled = false;
+                        brick_wallet.state.offset = brick_wallet.state.offset - 1;
+                        if ( brick_wallet.state.offset < 0 ) brick_wallet.state.offset = 0;
+                        if ( !brick_wallet.state.offset ) $( '.hist_back' ).disabled = true;
+                        brick_wallet.parseHistory();
+                    }
+                }
                 history.forEach( tx => {
                     if ( !tx ) return;
                     var txid = tx[ "payment_hash" ];
@@ -471,7 +578,7 @@
                     if ( "invoice" in tx ) invoice = tx[ "invoice" ];
                     if ( "bolt11" in tx ) invoice = tx[ "bolt11" ];
                     if ( $( '.invoice_box' ) && $( '.invoice_box' ).innerText === invoice ) {
-                        if ( $( '.x_modal' ) ) $( '.x_modal' ).click();
+                        if ( !$( '.modal' ).classList.contains( "hidden" ) ) $( '.x_modal' ).click();
                         $( '.invoice_box' ).innerText = "";
                     }
                     var arrow = `<span class="arrow incoming_arrow">&#8601;</span>`;
@@ -567,8 +674,27 @@
     <script>
         var send = async ( invoice, skip_conf ) => {
             var conf = true;
-            if ( !invoice ) invoice = prompt( `enter the invoice you want to pay` );
-            else if ( !skip_conf ) conf = confirm( `Are you sure you want to pay that invoice?` );
+            if ( !invoice ) return;
+            if ( !skip_conf ) {
+                try {
+                    var amount = bolt11.decode( invoice ).satoshis;
+                } catch ( e ) {
+                    return alert( `your attempt to send money failed for an unknown reason, please try again` );
+                }
+                var html = `
+                    <p>Are you sure you want to send ${amount} sats? It could be more due to routing fees. 1-2% routing fees are common.</p>
+                    <p><button class="yes_send" onclick="sessionStorage[ 'yes_send' ] = true;sessionStorage[ 'modal_cleared' ] = true;modalVanish();">Yes</button> <button onclick="sessionStorage[ 'modal_cleared' ] = true;modalVanish();">No</button></p>
+                `;
+                sessionStorage.removeItem( "yes_send" );
+                sessionStorage.removeItem( "modal_cleared" );
+                var block_til_clear = true;
+                showModal( html, block_til_clear );
+                await getNote( "modal_cleared" );
+                sessionStorage.removeItem( "modal_cleared" );
+                var conf = false;
+                if ( sessionStorage[ "yes_send" ] === "true" ) conf = true;
+                sessionStorage.removeItem( "yes_send" );
+            }
             if ( !conf ) return;
             var amnt = null;
             $( '.invoice_box' ).innerText = invoice;
@@ -593,7 +719,15 @@
                     new_txs[ new_tx[ "payment_hash" ] ] = new_tx;
                     brick_wallet.state.history = { ...new_txs, ...brick_wallet.state.history };
                     brick_wallet.parseHistory();
-                    if ( !$( '.modal' ) ) return;
+                    var sum = 0;
+                    Object.keys( brick_wallet.state.history ).forEach( txid => {
+                        var tx = brick_wallet.state.history[ txid ];
+                        if ( tx.type === "incoming" ) sum = sum + tx[ "amount" ];
+                        else sum = sum - ( tx[ "amount" ] + tx[ "fees_paid" ] );
+                    });
+                    $( '.balance' ).innerText = Math.floor( sum / 1000 ) + " sats";
+                    showPage( 'wallet_body' );
+                    if ( $( '.modal' ).classList.contains( "hidden" ) ) return;
                     showModal( "<p>paid</p>" );
                     await brick_wallet.waitSomeTime( 1000 );
                     if ( $( '.x_modal' ) ) $( '.x_modal' ).click();
@@ -604,49 +738,66 @@
             }
             loop();
         }
-        var scan = () => {
+        var showPage = page => {
             $( '.wallet_body' ).classList.add( "hidden" );
-            $( '.scanner_parent' ).classList.remove( "hidden" );
-            $( '.open_scanner' ).classList.add( "hidden" );
-            $( '.close_scanner' ).classList.remove( "hidden" );
-            var html5QrCode = new Html5Qrcode( "scanner" );
+            $( '.send_page' ).classList.add( "hidden" );
+            $( '.receive_page' ).classList.add( "hidden" );
+            $( '.open_send_scanner' ).classList.add( "hidden" );
+            $( '.close_send_scanner' ).classList.remove( "hidden" );
+            $( '.open_receive_scanner' ).classList.remove( "hidden" );
+            $( '.close_receive_scanner' ).classList.add( "hidden" );
+            $( '.receive_amnt' ).value = "";
+            $( `.${page}` ).classList.remove( "hidden" );
+        }
+        $( '.submit_receive_form' ).onclick = async () => {
+            var amnt = $( '.receive_amnt' ).value;
+            if ( !amnt ) return;
+            if ( isNaN( amnt ) && !( String( amnt ).startsWith( "lnurl" ) || String( amnt ).startsWith( "LNURL" ) ) ) return alert( `this method of receiving is not supported by this wallet, please try again with a number or an lnurl withdraw code` );
+            if ( String( amnt ).startsWith( "lnurl" ) || String( amnt ).startsWith( "LNURL" ) ) {
+                var decodedText = String( amnt );
+                var url = brick_wallet.hexToText( nwcjs.bytesToHex( bech32.bech32.fromWords( bech32.bech32.decode( decodedText, 100_000 ).words ) ) );
+                var data = await fetch( url );
+                data = await data.json();
+                var tag = data[ "tag" ];
+                if ( tag !== "payRequest" && tag !== "withdrawRequest" ) return alert( `this type of lnurl is not supported by this wallet` );
+                var conf = true;
+                if ( tag === "payRequest" ) conf = confirm( `That is an lnurl "paycode," meaning you will "send" money, not receive it. Click ok if that is what you want, otherwise click cancel` );
+                if ( !conf ) return;
+                return handleLNURLdata( data );
+            }
+            receive( amnt );
+        }
+        var scan = () => {
+            showPage( 'send_page' );
+            var html5QrCode = new Html5Qrcode( "send_scanner" );
             html5QrCode.start(
                 { facingMode: "environment" },
                 { fps: 10, qrbox: { width: 300, height: 300 } },
-                ( decodedText, decodedResult ) => {
-                    $( '.wallet_body' ).classList.remove( "hidden" );
-                    $( '.scanner_parent' ).classList.add( "hidden" );
+                async ( decodedText, decodedResult ) => {
+                    showPage( 'wallet_body' );
                     html5QrCode
                         .stop()
                         .then( res => {
                             html5QrCode.clear();
                         });
                     if ( decodedText.startsWith( "lightning:" ) || decodedText.startsWith( "LIGHTNING:" ) ) decodedText = decodedText.substring( 10 );
-                    if ( decodedText.startsWith( "lnurl" ) || decodedText.startsWith( "LNURL" ) ) return handleLNURL( decodedText );
+                    if ( decodedText.startsWith( "lnurl" ) || decodedText.startsWith( "LNURL" ) ) {
+                        var url = brick_wallet.hexToText( nwcjs.bytesToHex( bech32.bech32.fromWords( bech32.bech32.decode( decodedText, 100_000 ).words ) ) );
+                        var data = await fetch( url );
+                        data = await data.json();
+                        var tag = data[ "tag" ];
+                        if ( tag !== "payRequest" && tag !== "withdrawRequest" ) return alert( `this type of lnurl is not supported by this wallet` );
+                        var conf = true;
+                        if ( tag === "withdrawRequest" ) conf = confirm( `That is an lnurl "withdraw code," meaning you will "receive" money, not send it. Click ok if that is what you want, otherwise click cancel` );
+                        if ( !conf ) return;
+                        return handleLNURLdata( data );
+                    }
                     if ( !decodedText.startsWith( "lnbc" ) && !decodedText.startsWith( "LNBC" ) ) return alert( `your invoice was invalid, try again` );
                     send( decodedText );
                 }
             );
-            $( '.cancel_scanner' ).onclick = () => {
-                $( '.wallet_body' ).classList.remove( "hidden" );
-                $( '.scanner_parent' ).classList.add( "hidden" );
-                html5QrCode
-                    .stop()
-                    .then( res => {
-                        html5QrCode.clear();
-                    });
-            }
-            $( '.close_scanner' ).onclick = () => {
-                $( '.open_scanner' ).classList.remove( "hidden" );
-                $( '.close_scanner' ).classList.add( "hidden" );
-                html5QrCode
-                    .stop()
-                    .then( res => {
-                        html5QrCode.clear();
-                    });
-            }
-            $( '.open_scanner' ).onclick = () => {scan();}
-            $( '.paste_invoice' ).onclick = async () => {
+            $( '.cancel_send_scanner' ).onclick = () => {
+                showPage( 'wallet_body' );
                 try {
                     html5QrCode
                         .stop()
@@ -654,12 +805,55 @@
                             html5QrCode.clear();
                         });
                 } catch ( e ) {}
+            }
+            $( '.close_send_scanner' ).onclick = () => {
+                $( '.open_send_scanner' ).classList.remove( "hidden" );
+                $( '.close_send_scanner' ).classList.add( "hidden" );
+                html5QrCode
+                    .stop()
+                    .then( res => {
+                        html5QrCode.clear();
+                    });
+            }
+            $( '.open_send_scanner' ).onclick = () => {scan();}
+            $( '.paste_invoice' ).onclick = async () => {
+                try {
+                    html5QrCode
+                        .stop()
+                        .then( res => {
+                            html5QrCode.clear();
+                        });
+                    $( '.open_send_scanner' ).classList.remove( "hidden" );
+                    $( '.close_send_scanner' ).classList.add( "hidden" );
+                } catch ( e ) {}
                 await brick_wallet.waitSomeTime( 10 );
-                var invoice = prompt( `enter the invoice you want to pay` );
-                if ( invoice.startsWith( "lnurl" ) || invoice.startsWith( "LNURL" ) ) return handleLNURL( invoice );
+                var html = `
+                    <p>Enter the invoice you want to pay</p>
+                    <p><input class="ln_invoice_form"></p>
+                    <p><button class="submit_ln_invoice_form" onclick="sessionStorage[ 'ln_invoice' ] = $( '.ln_invoice_form' ).value;sessionStorage[ 'modal_cleared' ] = true;modalVanish();">Submit</button></p>
+                `;
+                sessionStorage.removeItem( "ln_invoice" );
+                sessionStorage.removeItem( "modal_cleared" );
+                var block_til_clear = true;
+                showModal( html, block_til_clear );
+                await getNote( "modal_cleared" );
+                sessionStorage.removeItem( "modal_cleared" );
+                var invoice = sessionStorage[ "ln_invoice" ];
+                sessionStorage.removeItem( "ln_invoice" );
+                if ( !invoice ) return;
+                if ( invoice.startsWith( "lnurl" ) || invoice.startsWith( "LNURL" ) ) {
+                    var url = brick_wallet.hexToText( nwcjs.bytesToHex( bech32.bech32.fromWords( bech32.bech32.decode( invoice, 100_000 ).words ) ) );
+                    var data = await fetch( url );
+                    data = await data.json();
+                    var tag = data[ "tag" ];
+                    if ( tag !== "payRequest" && tag !== "withdrawRequest" ) return alert( `this type of lnurl is not supported by this wallet` );
+                    var conf = true;
+                    if ( tag === "withdrawRequest" ) conf = confirm( `That is an lnurl "withdraw code," meaning you will "receive" money, not send it. Click ok if that is what you want, otherwise click cancel` );
+                    if ( !conf ) return;
+                    return handleLNURLdata( data );
+                }
                 send( invoice );
-                $( '.wallet_body' ).classList.remove( "hidden" );
-                $( '.scanner_parent' ).classList.add( "hidden" );
+                showPage( 'wallet_body' );
             }
             $( '.enter_ln_address' ).onclick = async () => {
                 try {
@@ -668,6 +862,8 @@
                         .then( res => {
                             html5QrCode.clear();
                         });
+                    $( '.open_send_scanner' ).classList.remove( "hidden" );
+                    $( '.close_send_scanner' ).classList.add( "hidden" );
                 } catch ( e ) {}
                 var html = `
                     <p>Enter a lightning address</p>
@@ -676,17 +872,19 @@
                     <p><input class="ln_addy_amnt"></p>
                     <p><button class="submit_ln_addy_form" onclick="sessionStorage[ 'ln_addy' ] = $( '.ln_addy_form' ).value;sessionStorage[ 'ln_addy_amnt' ] = $( '.ln_addy_amnt' ).value;sessionStorage[ 'modal_cleared' ] = true;modalVanish();">Submit</button></p>
                 `;
+                sessionStorage.removeItem( "ln_addy" );
+                sessionStorage.removeItem( "ln_addy_amnt" );
                 sessionStorage.removeItem( "modal_cleared" );
                 var block_til_clear = true;
                 showModal( html, block_til_clear );
                 await getNote( "modal_cleared" );
+                sessionStorage.removeItem( "modal_cleared" );
                 var lnaddy = sessionStorage[ "ln_addy" ];
                 var amount = Number( sessionStorage[ "ln_addy_amnt" ] );
                 sessionStorage.removeItem( "ln_addy" );
                 sessionStorage.removeItem( "ln_addy_amnt" );
-                sessionStorage.removeItem( "modal_cleared" );
-                $( '.wallet_body' ).classList.remove( "hidden" );
-                $( '.scanner_parent' ).classList.add( "hidden" );
+                if ( !lnaddy || !amount ) return;
+                showPage( 'wallet_body' );
                 showModal( `<p>sending...</p>` );
                 var relays = [ "wss://nostrue.com" ];
                 var [ invoice ] = await nwcjs.getZapRequest( lnaddy, amount, relays );
@@ -695,8 +893,7 @@
             }
         }
         $( '.send' ).onclick = () => {scan()};
-        $( '.receive' ).onclick = async () => {
-            var amnt = Number( prompt( `enter whatever amount you want to receive (in sats)` ) );
+        var receive = async amnt => {
             if ( !amnt ) {
                 $( '.invoice_box' ).innerText = "";
                 return;
@@ -707,7 +904,7 @@
             var invoice_info = await nwcjs.makeInvoice( brick_wallet.state.nwc_info, amnt, desc, delay_tolerance );
             if ( "result_type" in invoice_info && invoice_info[ "result_type" ] !== "make_invoice" ) return alert( `your wallet encountered an undefined error while creating your invoice, try again` );
             if ( "error" in invoice_info && invoice_info[ "error" ] ) return alert( `error creating your invoice: ${JSON.stringify( invoice_info[ "error" ] )} -- please try again` );
-            invoice = invoice_info.result.invoice;
+            var invoice = invoice_info.result.invoice;
             $( '.invoice_box' ).innerText = invoice;
             var url = "lightning:" + invoice;
             var a = document.createElement( "a" );
@@ -731,9 +928,89 @@
                 var status_info = await nwcjs.checkInvoice( brick_wallet.state.nwc_info, invoice, delay_tolerance );
                 if ( "error" in status_info && status_info[ "error" ] ) return alert( `error checking your invoice status: ${JSON.stringify( status_info[ "error" ] )} -- please refresh your page` );
                 if ( !status_info.result.settled_at ) return loop();
+                var new_tx = status_info[ "result" ];
+                if ( new_tx[ "invoice" ] ) var payment_hash = brick_wallet.getInvoicePmthash( new_tx[ "invoice" ] );
+                else var payment_hash = brick_wallet.getInvoicePmthash( new_tx[ "bolt11" ] );
+                var new_txs = {}
+                new_tx[ "detail_hidden" ] = true;
+                new_tx[ "payment_hash" ] = payment_hash;
+                new_txs[ new_tx[ "payment_hash" ] ] = new_tx;
+                brick_wallet.state.history = { ...new_txs, ...brick_wallet.state.history };
+                brick_wallet.parseHistory();
+                var sum = 0;
+                Object.keys( brick_wallet.state.history ).forEach( txid => {
+                    var tx = brick_wallet.state.history[ txid ];
+                    if ( tx.type === "incoming" ) sum = sum + tx[ "amount" ];
+                    else sum = sum - ( tx[ "amount" ] + tx[ "fees_paid" ] );
+                });
+                $( '.balance' ).innerText = Math.floor( sum / 1000 ) + " sats";
+                showPage( 'wallet_body' );
+                if ( $( '.modal' ).classList.contains( "hidden" ) ) return;
+                showModal( "<p>paid</p>" );
+                await brick_wallet.waitSomeTime( 1000 );
+                if ( $( '.x_modal' ) ) $( '.x_modal' ).click();
                 return true;
             }
             var paid = await loop();
+        }
+        $( '.receive' ).onclick = async () => {showPage( 'receive_page' );}
+        $( '.cancel_receive' ).onclick = () => {
+            showPage( 'wallet_body' );
+        }
+        $( '.open_receive_scanner' ).onclick = async () => {
+            $( '.open_receive_scanner' ).classList.add( "hidden" );
+            $( '.close_receive_scanner' ).classList.remove( "hidden" );
+            var html5QrCode = new Html5Qrcode( "receive_scanner" );
+            html5QrCode.start(
+                { facingMode: "environment" },
+                { fps: 10, qrbox: { width: 300, height: 300 } },
+                async ( decodedText, decodedResult ) => {
+                    showPage( 'wallet_body' );
+                    html5QrCode
+                        .stop()
+                        .then( res => {
+                            html5QrCode.clear();
+                        });
+                    var conf = true;
+                    if ( decodedText.startsWith( "lightning:" ) || decodedText.startsWith( "LIGHTNING:" ) ) {
+                        decodedText = decodedText.substring( 10 );
+                        if ( !decodedText.startsWith( "lnbc" ) && !decodedText.startsWith( "LNBC" ) ) return alert( `your invoice was invalid, try again` );
+                        conf = confirm( `That is a lightning invoice, meaning you will "send" money, not receive it. Click ok if that is what you want, otherwise click cancel` );
+                        if ( !conf ) return;
+                        send( decodedText );
+                    }
+                    if ( decodedText.startsWith( "lnurl" ) || decodedText.startsWith( "LNURL" ) ) {
+                        var url = brick_wallet.hexToText( nwcjs.bytesToHex( bech32.bech32.fromWords( bech32.bech32.decode( decodedText, 100_000 ).words ) ) );
+                        var data = await fetch( url );
+                        data = await data.json();
+                        var tag = data[ "tag" ];
+                        if ( tag !== "payRequest" && tag !== "withdrawRequest" ) return alert( `this type of lnurl is not supported by this wallet` );
+                        var conf = true;
+                        if ( tag === "payRequest" ) conf = confirm( `That is an lnurl "paycode," meaning you will "send" money, not receive it. Click ok if that is what you want, otherwise click cancel` );
+                        if ( !conf ) return;
+                        return handleLNURLdata( data );
+                    }
+                }
+            );
+            $( '.cancel_receive' ).onclick = () => {
+                showPage( 'wallet_body' );
+                try {
+                    html5QrCode
+                        .stop()
+                        .then( res => {
+                            html5QrCode.clear();
+                        });
+                } catch ( e ) {}
+            }
+            $( '.close_receive_scanner' ).onclick = () => {
+                $( '.open_receive_scanner' ).classList.remove( "hidden" );
+                $( '.close_receive_scanner' ).classList.add( "hidden" );
+                html5QrCode
+                    .stop()
+                    .then( res => {
+                        html5QrCode.clear();
+                    });
+            }
         }
         $( '.disconnect' ).onclick = () => {
             var conf = confirm( `Are you sure you want to disconnect this wallet?` );
@@ -758,7 +1035,7 @@
             var tx = brick_wallet.state.history[ txid ];
             if ( !tx[ "detail_hidden" ] ) tx[ "detail_hidden" ] = true;
         });
-        brick_wallet.init();
+        window.onload = () => {brick_wallet.init();}
     </script>
     <div class="black-bg hidden"></div>
     <div class="modal hidden"></div>
