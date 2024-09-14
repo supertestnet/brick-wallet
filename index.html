@@ -1132,6 +1132,7 @@
                     var USDMXN = balance.forex[ currency ];
                     bal_to_show = USDMXN * bal_to_show;
                 }
+                if ( currency === "sats" ) bal_to_show = Number( bal_to_show ).toLocaleString();
                 $$( '.tx_amt' ).forEach( tx_amt => {
                     var bal_for_tx_amt = Number( tx_amt.getAttribute( "data-sats" ) );
                     if ( currency === "usd" ) {
@@ -1148,6 +1149,7 @@
                         bal_for_tx_amt = USDMXN * bal_for_tx_amt;
                         bal_for_tx_amt = bal_for_tx_amt.toFixed( 2 );
                     }
+                    if ( currency === "sats" ) bal_for_tx_amt = Number( bal_for_tx_amt ).toLocaleString();
                     tx_amt.innerText = bal_for_tx_amt + ` ${currency}`
                 });
                 return `
