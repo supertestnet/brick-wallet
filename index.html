@@ -79,13 +79,7 @@
                 var max = Math.floor( data[ "maxSendable" ] / 1000 );
                 if ( isNaN( min ) || isNaN( max ) ) return alert( `the lnurl was invalid, try again` );
                 if ( !Number( min ) || !Number( max ) ) return alert( `the lnurl was invalid, try again` );
-                var sum = 0;
-                Object.keys( brick_wallet.state.history ).forEach( txid => {
-                    var tx = brick_wallet.state.history[ txid ];
-                    if ( tx.type === "incoming" ) sum = sum + tx[ "amount" ];
-                    else sum = sum - ( tx[ "amount" ] + tx[ "fees_paid" ] );
-                });
-                sum = Math.floor( sum / 1000 );
+                balance.calculateBalance();
                 var html = `
                     <p>Enter an amount to send</p>
                     <p>Min: ${min.toLocaleString()} sats | Max: ${Math.min( max, sum ).toLocaleString()} sats</p>
@@ -152,26 +146,14 @@
                     new_txs[ new_tx[ "payment_hash" ] ] = new_tx;
                     brick_wallet.state.history = { ...new_txs, ...brick_wallet.state.history };
                     brick_wallet.parseHistory();
-                    var sum = 0;
-                    Object.keys( brick_wallet.state.history ).forEach( txid => {
-                        var tx = brick_wallet.state.history[ txid ];
-                        if ( tx.type === "incoming" ) sum = sum + tx[ "amount" ];
-                        else sum = sum - ( tx[ "amount" ] + tx[ "fees_paid" ] );
-                    });
-                    $( '.balance' ).innerText = Math.floor( sum / 1000 ) + " sats";
+                    balance.calculateBalance();
                     if ( !$( '.modal' ).classList.contains( "hidden" ) ) {
                         showModal( "<p>success</p>" );
                         await brick_wallet.waitSomeTime( 1000 );
                         if ( !$( '.modal' ).classList.contains( "hidden" ) ) $( '.x_modal' ).click();
                     }
                     brick_wallet.parseHistory();
-                    var sum = 0;
-                    Object.keys( brick_wallet.state.history ).forEach( txid => {
-                        var tx = brick_wallet.state.history[ txid ];
-                        if ( tx.type === "incoming" ) sum = sum + tx[ "amount" ];
-                        else sum = sum - ( tx[ "amount" ] + tx[ "fees_paid" ] );
-                    });
-                    $( '.balance' ).innerText = Math.floor( sum / 1000 ) + " sats";
+                    balance.calculateBalance();
                     showPage( 'wallet_body' );
                     return true;
                 }
@@ -185,6 +167,86 @@
                     alert( `There was an unknown problem processing your withdrawal, please try again` );
                 }
             }
+        }
+        var getData = url => {
+            return new Promise( async function( resolve, reject ) {
+                function inner_get( url ) {
+                    var xhttp = new XMLHttpRequest();
+                    xhttp.open( "GET", url, true );
+                    xhttp.send();
+                    return xhttp;
+                }
+                var data = inner_get( url );
+                data.onerror = function( e ) {
+                    resolve( "error" );
+                }
+                async function isResponseReady() {
+                    return new Promise( function( resolve2, reject ) {
+                        if ( !data.responseText || data.readyState != 4 ) {
+                            setTimeout( async function() {
+                                var msg = await isResponseReady();
+                                resolve2( msg );
+                            }, 1 );
+                        } else {
+                            resolve2( data.responseText );
+                        }
+                    });
+                }
+                var returnable = await isResponseReady();
+                resolve( returnable );
+            });
+        }
+
+        var getBitcoinPriceFromCoinbase = async () => {
+            var data = await getData( "https://api.coinbase.com/v2/prices/BTC-USD/spot" );
+            if ( data == "error" ) return 0;
+            var json = JSON.parse( data );
+            var price = json[ "data" ][ "amount" ];
+            return price;
+        }
+
+        var getBitcoinPriceFromKraken = async () => {
+            var data = await getData( "https://api.kraken.com/0/public/Ticker?pair=XBTUSD" );
+            if ( data == "error" ) return 0;
+            var json = JSON.parse( data );
+            var price = json[ "result" ][ "XXBTZUSD" ][ "a" ][ 0 ];
+            return price;
+        }
+
+        var getBitcoinPriceFromCoindesk = async () => {
+            var data = await getData( "https://api.coindesk.com/v1/bpi/currentprice.json" );
+            if ( data == "error" ) return 0;
+            var json = JSON.parse( data );
+            var price = json[ "bpi" ][ "USD" ][ "rate_float" ];
+            return price;
+        }
+
+        var getBitcoinPriceFromGemini = async () => {
+            var data = await getData( "https://api.gemini.com/v2/ticker/BTCUSD" );
+            if ( data == "error" ) return 0;
+            var json = JSON.parse( data );
+            var price = json[ "bid" ];
+            return price;
+        }
+
+        var getBitcoinPriceFromCoinGecko = async () => {
+            var data = await getData( "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&precision=2" );
+            if ( data == "error" ) return 0;
+            var json = JSON.parse( data );
+            var price = json[ "bitcoin" ][ "usd" ];
+            return price;
+        }
+
+        var getBitcoinPrice = async () => {
+            var prices = [];
+            var cbprice = await getBitcoinPriceFromCoinbase();
+            var kprice = await getBitcoinPriceFromKraken();
+            var cdprice = await getBitcoinPriceFromCoindesk();
+            var gprice = await getBitcoinPriceFromGemini();
+            var cgprice = await getBitcoinPriceFromCoinGecko();
+            prices.push( Number( cbprice ), Number( kprice ), Number( cdprice ), Number( gprice ), Number( cgprice ) );
+            prices.sort();
+            return prices[ 2 ];
         }
     </script>
     <style>
@@ -218,6 +280,9 @@
         }
         .hidden {
             display: none !important;
+        }
+        .balance span {
+            cursor: pointer;
         }
         .wallet_body, .send_page, .receive_page {
             max-width: 15rem;
@@ -519,13 +584,7 @@
                 }
                 if ( !brick_wallet.state.nwc_string ) return;
                 brick_wallet.state.nwc_info = nwcjs.processNWCstring( brick_wallet.state.nwc_string );
-                var sum = 0;
-                Object.keys( brick_wallet.state.history ).forEach( txid => {
-                    var tx = brick_wallet.state.history[ txid ];
-                    if ( tx.type === "incoming" ) sum = sum + tx[ "amount" ];
-                    else sum = sum - ( tx[ "amount" ] + tx[ "fees_paid" ] );
-                });
-                $( '.balance' ).innerText = Math.floor( sum / 1000 ) + " sats";
+                balance.calculateBalance();
                 var from = brick_wallet.state.last_tx;
                 var delay_tolerance = 10;
                 var txs = await nwcjs.listTransactions( brick_wallet.state.nwc_info, from, null, null, null, null, null, delay_tolerance );
@@ -538,13 +597,7 @@
                     brick_wallet.state.history = { ...new_txs, ...brick_wallet.state.history };
                     brick_wallet.state.last_tx = txs.result.transactions[ 0 ].created_at + 1;
                     brick_wallet.parseHistory();
-                    var sum = 0;
-                    Object.keys( brick_wallet.state.history ).forEach( txid => {
-                        var tx = brick_wallet.state.history[ txid ];
-                        if ( tx.type === "incoming" ) sum = sum + tx[ "amount" ];
-                        else sum = sum - ( tx[ "amount" ] + tx[ "fees_paid" ] );
-                    });
-                    $( '.balance' ).innerText = Math.floor( sum / 1000 ) + " sats";
+                    balance.calculateBalance();
                 }
                 brick_wallet.init();
             },
@@ -571,6 +624,7 @@
                         $( '.hist_back' ).disabled = false;
                         brick_wallet.state.offset = brick_wallet.state.offset + 1;
                         brick_wallet.parseHistory();
+                        balance.calculateBalance();
                     }
                     $( '.hist_back' ).onclick = () => {
                         if ( $( '.hist_back' ).disabled ) return;
@@ -579,6 +633,7 @@
                         if ( brick_wallet.state.offset < 0 ) brick_wallet.state.offset = 0;
                         if ( !brick_wallet.state.offset ) $( '.hist_back' ).disabled = true;
                         brick_wallet.parseHistory();
+                        balance.calculateBalance();
                     }
                 }
                 history.forEach( tx => {
@@ -635,7 +690,7 @@
                         <div class="clickable_tx_parent" data-txid="${txid}">
                             <div class="clickable_tx ${incoming_or_outgoing}">
                                 ${arrow}
-                                <span class="tx_amt">${Math.floor( ( tx[ "amount" ] + tx[ "fees_paid" ] ) / 1000 )} sats</span>
+                                <span class="tx_amt" data-sats="${Math.floor( ( tx[ "amount" ] + tx[ "fees_paid" ] ) / 1000 )}">${Math.floor( ( tx[ "amount" ] + tx[ "fees_paid" ] ) / 1000 )} sats</span>
                             </div>
                             <div class="hidable_tx_data ${hidden_or_shown}">
                                 <div class="tx_detail">
@@ -729,13 +784,7 @@
                     new_txs[ new_tx[ "payment_hash" ] ] = new_tx;
                     brick_wallet.state.history = { ...new_txs, ...brick_wallet.state.history };
                     brick_wallet.parseHistory();
-                    var sum = 0;
-                    Object.keys( brick_wallet.state.history ).forEach( txid => {
-                        var tx = brick_wallet.state.history[ txid ];
-                        if ( tx.type === "incoming" ) sum = sum + tx[ "amount" ];
-                        else sum = sum - ( tx[ "amount" ] + tx[ "fees_paid" ] );
-                    });
-                    $( '.balance' ).innerText = Math.floor( sum / 1000 ) + " sats";
+                    balance.calculateBalance();
                     showPage( 'wallet_body' );
                     if ( $( '.modal' ).classList.contains( "hidden" ) ) return;
                     showModal( "<p>paid</p>" );
@@ -969,13 +1018,7 @@
                 new_txs[ new_tx[ "payment_hash" ] ] = new_tx;
                 brick_wallet.state.history = { ...new_txs, ...brick_wallet.state.history };
                 brick_wallet.parseHistory();
-                var sum = 0;
-                Object.keys( brick_wallet.state.history ).forEach( txid => {
-                    var tx = brick_wallet.state.history[ txid ];
-                    if ( tx.type === "incoming" ) sum = sum + tx[ "amount" ];
-                    else sum = sum - ( tx[ "amount" ] + tx[ "fees_paid" ] );
-                });
-                $( '.balance' ).innerText = Math.floor( sum / 1000 ) + " sats";
+                balance.calculateBalance();
                 showPage( 'wallet_body' );
                 if ( $( '.modal' ).classList.contains( "hidden" ) ) return;
                 showModal( "<p>paid</p>" );
@@ -1062,6 +1105,67 @@
             localStorage.removeItem( "brick_wallet_state" );
             stop_the_save = true;
         }
+
+        var balance = {
+            html: async () => {
+                var bal_to_show = balance.bal;
+                if ( balance.currency === "usd" ) {
+                    bal_to_show = balance.satsToDollars( balance.bal );
+                    bal_to_show = bal_to_show.toFixed( 2 );
+                }
+                $$( '.tx_amt' ).forEach( tx_amt => {
+                    var bal_for_tx_amt = Number( tx_amt.getAttribute( "data-sats" ) );
+                    if ( balance.currency === "usd" ) {
+                        bal_for_tx_amt = balance.satsToDollars( bal_for_tx_amt );
+                        bal_for_tx_amt = bal_for_tx_amt.toFixed( 2 );
+                    }
+                    tx_amt.innerText = bal_for_tx_amt + ` ${balance.currency}`
+                });
+                return `
+                    <span onclick="balance.switchCurrency()">${bal_to_show} ${balance.currency}</span>
+                `;
+            },
+            bal: 0,
+            currency: "sats",
+            price: 0,
+            switchCurrency: () => {
+                balance.setState(() => {
+                    if ( balance.currency === "sats" ) balance.currency = "usd";
+                    else balance.currency = "sats";
+                });
+            },
+            getPrice: async () => {
+                balance.price = await getBitcoinPrice();
+                await brick_wallet.waitSomeTime( 15_000 );
+                balance.getPrice();
+            },
+            satsToDollars: sats => {
+                if ( sats >= 100000000 ) sats = sats * 10;
+                var value_in_dollars = Number( String( sats ).padStart( 8, "0" ).slice( 0,-9 ) + "." + String( sats ).padStart( 8, "0" ).slice( -9 ) ) * balance.price;
+                return value_in_dollars;
+            },
+            setState: (callback) => {
+                callback();
+                balance.render();
+            },
+            calculateBalance: () => {
+                balance.setState(() => {
+                    var sum = 0;
+                    Object.keys( brick_wallet.state.history ).forEach( txid => {
+                        var tx = brick_wallet.state.history[ txid ];
+                        if ( tx.type === "incoming" ) sum = sum + tx[ "amount" ];
+                        else sum = sum - ( tx[ "amount" ] + tx[ "fees_paid" ] );
+                    });
+                    balance.bal = Math.floor( sum / 1000 );
+                });
+            },
+            render: async () => {
+                $( '.balance' ).innerHTML = await balance.html();
+            }
+        };
+
+        //Local storage and initialization
+
         if ( localStorage[ "brick_wallet_state" ] ) brick_wallet.state = JSON.parse( localStorage[ "brick_wallet_state" ] );
         var walletSaver = async () => {
             if ( stop_the_save ) {
@@ -1079,6 +1183,7 @@
             var tx = brick_wallet.state.history[ txid ];
             if ( !tx[ "detail_hidden" ] ) tx[ "detail_hidden" ] = true;
         });
+        balance.getPrice();
         window.onload = () => {brick_wallet.init();}
     </script>
     <div class="black-bg hidden"></div>
