@@ -328,6 +328,15 @@
             justify-content: space-between;
             margin-bottom: 1rem;
         }
+        .noselect {
+            -webkit-touch-callout: none; /* iOS Safari */
+            -webkit-user-select: none; /* Safari */
+            -khtml-user-select: none; /* Konqueror HTML */
+            -moz-user-select: none; /* Old versions of Firefox */
+            -ms-user-select: none; /* Internet Explorer/Edge */
+            user-select: none; /* Non-prefixed version, currently
+            supported by Chrome, Edge, Opera and Firefox */
+        }
         .arrow {
             display: flex;
             padding: .5rem;
@@ -336,22 +345,12 @@
             height: 2rem;
             justify-content: center;
             align-items: center;
-            -webkit-user-select: none; /* Safari */        
-            -moz-user-select: none; /* Firefox */
-            -ms-user-select: none; /* IE10+/Edge */
-            user-select: none; /* Standard */
         }
         .arrow.incoming_arrow {
             border: 1px solid #52b354;
         }
         .arrow.outgoing_arrow {
             border: 1px solid #77a8fc;
-        }
-        .tx_amt {
-            -webkit-user-select: none; /* Safari */        
-            -moz-user-select: none; /* Firefox */
-            -ms-user-select: none; /* IE10+/Edge */
-            user-select: none; /* Standard */
         }
         .history > :first-child {
             border-top: 1px solid black;
@@ -390,6 +389,10 @@
         .disconnect {
             margin: 1rem 0rem;
             width: 100%;
+        }
+        .supported_currencies button,
+        .selected_currencies button {
+            margin: .5rem;
         }
         .black-bg {
             width: 100%;
@@ -440,7 +443,6 @@
             overflow: hidden;
             text-overflow: ellipsis;
             display: block;
-            user-select: none;
         }
         .copy_btn {
             width: 100%;
@@ -536,12 +538,13 @@
         var stop_the_save;
         var brick_wallet = {
             state: {
-                // nwc_string: "nostr+walletconnect://114ae6acd58af62cb167ffc127eec8ac77a587e4297610ed59fc219bfe4c1f7a?relay=wss://nostrue.com&secret=3bf62c4b2f68d5d07339e88fba4bab8969e9b1b2273b2daf580e118aa43dbd33",
                 nwc_string: null,
                 nwc_info: null,
                 last_tx: 1,
                 offset: 0,
                 history: [],
+                selected_currencies: [],
+                supported_currencies: [],
             },
             loaded: false,
             waitSomeTime: async milliseconds => new Promise( resolve => setTimeout( resolve, milliseconds ) ),
@@ -647,10 +650,10 @@
                         if ( !$( '.modal' ).classList.contains( "hidden" ) ) $( '.x_modal' ).click();
                         $( '.invoice_box' ).innerText = "";
                     }
-                    var arrow = `<span class="arrow incoming_arrow">&#8601;</span>`;
+                    var arrow = `<span class="noselect arrow incoming_arrow">&#8601;</span>`;
                     var incoming_or_outgoing = "incoming_tx";
                     if ( tx[ "type" ] === "outgoing" ) {
-                        arrow = `<span class="arrow outgoing_arrow">&#8599;</span>`;
+                        arrow = `<span class="noselect arrow outgoing_arrow">&#8599;</span>`;
                         incoming_or_outgoing = "outgoing_tx";
                     }
                     var desc_div = `
@@ -691,7 +694,7 @@
                         <div class="clickable_tx_parent" data-txid="${txid}">
                             <div class="clickable_tx ${incoming_or_outgoing}">
                                 ${arrow}
-                                <span class="tx_amt" data-sats="${Math.floor( ( tx[ "amount" ] + tx[ "fees_paid" ] ) / 1000 )}">${Math.floor( ( tx[ "amount" ] + tx[ "fees_paid" ] ) / 1000 )} sats</span>
+                                <span class="noselect tx_amt" data-sats="${Math.floor( ( tx[ "amount" ] + tx[ "fees_paid" ] ) / 1000 )}">${Math.floor( ( tx[ "amount" ] + tx[ "fees_paid" ] ) / 1000 )} sats</span>
                             </div>
                             <div class="hidable_tx_data ${hidden_or_shown}">
                                 <div class="tx_detail">
@@ -996,7 +999,7 @@
             var prep_div = document.createElement( "div" );
             prep_div.append( a );
             var div_html = prep_div.innerHTML;
-            showModal( `<div style="max-width: 15rem; margin: auto;">${div_html}<div class="copy_box"><input class="copy_addy" value="${invoice}" disabled=""><span>&nbsp;</span><div class="copy_btn">⎘</div></div></div>` );
+            showModal( `<div style="max-width: 15rem; margin: auto;">${div_html}<div class="copy_box"><input class="copy_addy noselect" value="${invoice}" disabled=""><span>&nbsp;</span><div class="copy_btn">⎘</div></div></div>` );
             $( '.copy_btn' ).onclick = () => {
                 var copytext = $( '.copy_addy' );
                 copytext.select();
@@ -1111,42 +1114,99 @@
             html: async () => {
                 var sats = balance.bal;
                 var bal_to_show = sats;
-                if ( balance.currency === "usd" ) {
+                var currency = balance.currencies[ balance.currency ];
+                if ( currency !== "sats" && currency !== "btc" && currency !== "usd" && !( currency in balance.forex ) ) {
+                    var rate = await balance.getTicker( currency.toUpperCase() );
+                    balance.forex[ currency ] = rate;
+                }
+                if ( currency === "usd" ) {
                     bal_to_show = balance.satsToDollars( balance.bal );
                     bal_to_show = bal_to_show.toFixed( 2 );
+                    bal_to_show = Number( bal_to_show ).toLocaleString();
                 }
-                bal_to_show = Number( bal_to_show ).toLocaleString();
+                if ( currency === "btc" ) {
+                    bal_to_show = balance.satsToBitcoin( balance.bal );
+                }
+                if ( currency !== "sats" && currency !== "btc" && currency !== "usd" ) {
+                    bal_to_show = balance.satsToDollars( balance.bal );
+                    var USDMXN = balance.forex[ currency ];
+                    bal_to_show = USDMXN * bal_to_show;
+                }
                 $$( '.tx_amt' ).forEach( tx_amt => {
                     var bal_for_tx_amt = Number( tx_amt.getAttribute( "data-sats" ) );
-                    if ( balance.currency === "usd" ) {
+                    if ( currency === "usd" ) {
                         bal_for_tx_amt = balance.satsToDollars( bal_for_tx_amt );
                         bal_for_tx_amt = bal_for_tx_amt.toFixed( 2 );
+                        bal_for_tx_amt = Number( bal_for_tx_amt ).toLocaleString();
                     }
-                    bal_for_tx_amt = Number( bal_for_tx_amt ).toLocaleString();
-                    tx_amt.innerText = bal_for_tx_amt + ` ${balance.currency}`
+                    if ( currency === "btc" ) {
+                        bal_for_tx_amt = balance.satsToBitcoin( bal_for_tx_amt );
+                    }
+                    if ( currency !== "sats" && currency !== "btc" && currency !== "usd" ) {
+                        bal_for_tx_amt = balance.satsToDollars( bal_for_tx_amt );
+                        var USDMXN = balance.forex[ currency ];
+                        bal_for_tx_amt = USDMXN * bal_for_tx_amt;
+                        bal_for_tx_amt = bal_for_tx_amt.toFixed( 2 );
+                    }
+                    tx_amt.innerText = bal_for_tx_amt + ` ${currency}`
                 });
                 return `
-                    <span data-sats_sum="${sats}" onclick="balance.switchCurrency()">${bal_to_show} ${balance.currency}</span>
+                    <span class="noselect" data-sats_sum="${sats}">${bal_to_show} ${currency}</span>
                 `;
             },
             bal: 0,
-            currency: "sats",
+            currency: 0,
+            currencies: [
+                "sats",
+                "btc",
+                "usd",
+            ],
+            supported_currencies: [
+                "eur",
+                "gbp",
+                "cad",
+                "cny",
+                "jpy",
+                "inr",
+                "rub",
+                "mxn",
+            ],
+            forex: {},
+            forex_loaded: false,
             price: 0,
+            onlongtouch: null,
+            longtouchtimer: null,
+            touchduration: 800,
             switchCurrency: () => {
-                balance.setState(() => {
-                    if ( balance.currency === "sats" ) balance.currency = "usd";
-                    else balance.currency = "sats";
-                });
+                balance.setState(() => balance.currency = ( balance.currency + 1 ) % balance.currencies.length );
             },
             getPrice: async () => {
                 balance.price = await getBitcoinPrice();
                 await brick_wallet.waitSomeTime( 15_000 );
                 balance.getPrice();
             },
+            getTicker: async ticker => {
+                var url = `https://assets.ino.com/data/quote/?format=json&s=FOREX_USD${ticker}`;
+                var data = await fetch( url );
+                var json = await data.json();
+                return Number( json[ `FOREX_USD${ticker}` ][ "last" ] );
+            },
             satsToDollars: sats => {
                 if ( sats >= 100000000 ) sats = sats * 10;
                 var value_in_dollars = Number( String( sats ).padStart( 8, "0" ).slice( 0,-9 ) + "." + String( sats ).padStart( 8, "0" ).slice( -9 ) ) * balance.price;
                 return value_in_dollars;
+            },
+            satsToBitcoin: sats => {
+                var btc = String( sats ).padStart( 8, "0" ).slice( 0,-8 ) + "." + String( sats ).padStart( 8, "0" ).slice( -8 );
+                if ( btc.endsWith( "00000" ) ) {
+                    btc = btc.substring( 0, btc.length - 5 );
+                    var i; for ( i=0; i<5; i++ ) {
+                        if ( btc.endsWith( "0" ) ) btc = btc.substring( 0, btc.length - 1 );
+                    }
+                    if ( btc.endsWith( "." ) ) btc = btc.substring( 0, btc.length - 1 );
+                    if ( !btc ) btc = 0;
+                }
+                return btc;
             },
             setState: (callback) => {
                 callback();
@@ -1163,8 +1223,89 @@
                     balance.bal = Math.floor( sum / 1000 );
                 });
             },
+            addCurrency: item => {
+                item.onclick = () => {
+                    var btn = document.createElement( "button" );
+                    btn.innerText = item.innerText;
+                    btn.addEventListener( "click", ()=>{balance.removeCurrency( btn );});
+                    btn.click();
+                    $( '.selected_currencies' ).append( btn );
+                    item.remove();
+                }
+            },
+            removeCurrency: item => {
+                item.onclick = () => {
+                    var btn = document.createElement( "button" );
+                    btn.innerText = item.innerText;
+                    btn.addEventListener( "click", ()=>{balance.addCurrency( btn );});
+                    btn.click();
+                    $( '.supported_currencies' ).append( btn );
+                    item.remove();
+                }
+            },
+            modCurrencies: async () => {
+                var selected_currencies = [];
+                $$( '.selected_currencies button' ).forEach( item => {selected_currencies.push( item.innerText );});
+                var supported_currencies = [];
+                $$( '.supported_currencies button' ).forEach( item => {supported_currencies.push( item.innerText );});
+                balance.currencies = selected_currencies;
+                balance.supported_currencies = supported_currencies;
+                balance.currency = 0;
+                balance.render();
+                if ( "selected_currencies" in brick_wallet.state ) brick_wallet.state[ "selected_currencies" ] = [];
+                if ( "supported_currencies" in brick_wallet.state ) brick_wallet.state[ "supported_currencies" ] = [];
+                brick_wallet.state[ "selected_currencies" ] = selected_currencies;
+                brick_wallet.state[ "supported_currencies" ] = supported_currencies;
+                var i; for ( i=0; i<balance.currencies.length; i++ ) {
+                    var currency = balance.currencies[ i ];
+                    if ( currency !== "sats" && currency !== "btc" && currency !== "usd" && !( currency in balance.forex ) ) {
+                        var rate = await balance.getTicker( currency.toUpperCase() );
+                        // console.log( `got rate for ${currency}: 1 usd = ${rate} ${currency}` );
+                        balance.forex[ currency ] = rate;
+                        await brick_wallet.waitSomeTime( 2000 );
+                    }
+                }
+            },
             render: async () => {
                 $( '.balance' ).innerHTML = await balance.html();
+                $( '.balance' ).onpointerdown = function() {
+                    balance.onlongtouch = async () => {
+                        balance.longtouchtimer = null;
+                        var html = `
+                            <p>Add/remove currencies</p>
+                            <p class="selected_currencies"></p>
+                            <p>Quick-tapping the price will toggle through the above currencies in order. Add currencies by tapping them in the list below; remove them by tapping them in the list above.</p>
+                            <p class="supported_currencies"></p>
+                            <p><button class="submit_currencies_form" onclick="balance.modCurrencies();sessionStorage[ 'modal_cleared' ] = true;modalVanish();">Submit</button></p>
+                        `;
+                        sessionStorage.removeItem( "modal_cleared" );
+                        var block_til_clear = true;
+                        showModal( html, block_til_clear );
+                        balance.currencies.forEach( item => {
+                            var btn = document.createElement( "button" );
+                            btn.innerText = item;
+                            btn.addEventListener( "click", ()=>{balance.removeCurrency( btn );});
+                            btn.click();
+                            $( '.selected_currencies' ).append( btn );
+                        });
+                        balance.supported_currencies.forEach( item => {
+                            var btn = document.createElement( "button" );
+                            btn.innerText = item;
+                            btn.addEventListener( "click", ()=>{balance.addCurrency( btn );});
+                            btn.click();
+                            $( '.supported_currencies' ).append( btn );
+                        });
+                        await getNote( "modal_cleared" );
+                        sessionStorage.removeItem( "modal_cleared" );
+                    };
+                    if ( !balance.longtouchtimer || ( !isNaN( balance.longtouchtimer ) && balance.longtouchtimer != null ) ) {
+                        balance.longtouchtimer = setTimeout( balance.onlongtouch, balance.touchduration );
+                    }
+                }
+                $( '.balance' ).onpointerup = function( e ) {
+                    if ( balance.longtouchtimer ) clearTimeout( balance.longtouchtimer );
+                    if ( balance.longtouchtimer ) balance.switchCurrency();
+                }
             }
         };
 
@@ -1183,6 +1324,8 @@
         }
         walletSaver();
         brick_wallet.state.offset = 0;
+        if ( "selected_currencies" in brick_wallet.state && brick_wallet.state.selected_currencies.length ) balance.currencies = brick_wallet.state.selected_currencies;
+        if ( "supported_currencies" in brick_wallet.state && brick_wallet.state.supported_currencies.length ) balance.supported_currencies = brick_wallet.state.supported_currencies;
         Object.keys( brick_wallet.state.history ).forEach( txid => {
             var tx = brick_wallet.state.history[ txid ];
             if ( !tx[ "detail_hidden" ] ) tx[ "detail_hidden" ] = true;
