@@ -1115,12 +1115,14 @@
                     bal_to_show = balance.satsToDollars( balance.bal );
                     bal_to_show = bal_to_show.toFixed( 2 );
                 }
+                bal_to_show = Number( bal_to_show ).toLocaleString();
                 $$( '.tx_amt' ).forEach( tx_amt => {
                     var bal_for_tx_amt = Number( tx_amt.getAttribute( "data-sats" ) );
                     if ( balance.currency === "usd" ) {
                         bal_for_tx_amt = balance.satsToDollars( bal_for_tx_amt );
                         bal_for_tx_amt = bal_for_tx_amt.toFixed( 2 );
                     }
+                    bal_for_tx_amt = Number( bal_for_tx_amt ).toLocaleString();
                     tx_amt.innerText = bal_for_tx_amt + ` ${balance.currency}`
                 });
                 return `
