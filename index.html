@@ -1126,14 +1126,17 @@
                     bal_to_show = balance.satsToDollars( balance.bal );
                     bal_to_show = bal_to_show.toFixed( 2 );
                     bal_to_show = Number( bal_to_show ).toLocaleString();
+                    if ( bal_to_show.includes( "." ) && bal_to_show.length - bal_to_show.indexOf( "." ) == 2 ) bal_to_show = bal_to_show + "0";
                 }
                 if ( currency === "btc" ) {
                     bal_to_show = balance.satsToBitcoin( balance.bal );
                 }
                 if ( currency !== "sats" && currency !== "btc" && currency !== "usd" ) {
                     bal_to_show = balance.satsToDollars( balance.bal );
-                    var USDMXN = balance.forex[ currency ];
-                    bal_to_show = USDMXN * bal_to_show;
+                    var USDFNX = balance.forex[ currency ];
+                    bal_to_show = USDFNX * bal_to_show;
+                    bal_to_show = bal_to_show.toFixed( 2 );
+                    if ( bal_to_show.includes( "." ) && bal_to_show.length - bal_to_show.indexOf( "." ) == 2 ) bal_to_show = bal_to_show + "0";
                 }
                 if ( currency === "sats" ) bal_to_show = Number( bal_to_show ).toLocaleString();
                 $$( '.tx_amt' ).forEach( tx_amt => {
@@ -1142,15 +1145,17 @@
                         bal_for_tx_amt = balance.satsToDollars( bal_for_tx_amt );
                         bal_for_tx_amt = bal_for_tx_amt.toFixed( 2 );
                         bal_for_tx_amt = Number( bal_for_tx_amt ).toLocaleString();
+                        if ( bal_for_tx_amt.includes( "." ) && bal_for_tx_amt.length - bal_for_tx_amt.indexOf( "." ) == 2 ) bal_for_tx_amt = bal_for_tx_amt + "0";
                     }
                     if ( currency === "btc" ) {
                         bal_for_tx_amt = balance.satsToBitcoin( bal_for_tx_amt );
                     }
                     if ( currency !== "sats" && currency !== "btc" && currency !== "usd" ) {
                         bal_for_tx_amt = balance.satsToDollars( bal_for_tx_amt );
-                        var USDMXN = balance.forex[ currency ];
-                        bal_for_tx_amt = USDMXN * bal_for_tx_amt;
+                        var USDFNX = balance.forex[ currency ];
+                        bal_for_tx_amt = USDFNX * bal_for_tx_amt;
                         bal_for_tx_amt = bal_for_tx_amt.toFixed( 2 );
+                        if ( bal_for_tx_amt.includes( "." ) && bal_for_tx_amt.length - bal_for_tx_amt.indexOf( "." ) == 2 ) bal_for_tx_amt = bal_for_tx_amt + "0";
                     }
                     if ( currency === "sats" ) bal_for_tx_amt = Number( bal_for_tx_amt ).toLocaleString();
                     tx_amt.innerText = bal_for_tx_amt + ` ${currency}`
@@ -1335,6 +1340,18 @@
             var tx = brick_wallet.state.history[ txid ];
             if ( !tx[ "detail_hidden" ] ) tx[ "detail_hidden" ] = true;
         });
+        var getForex = async () => {
+            var i; for ( i=0; i<balance.currencies.length; i++ ) {
+                var currency = balance.currencies[ i ];
+                if ( currency !== "sats" && currency !== "btc" && currency !== "usd" && !( currency in balance.forex ) ) {
+                    var rate = await balance.getTicker( currency.toUpperCase() );
+                    // console.log( `got rate for ${currency}: 1 usd = ${rate} ${currency}` );
+                    balance.forex[ currency ] = rate;
+                    await brick_wallet.waitSomeTime( 2000 );
+                }
+            }
+        }
+        getForex();
         balance.getPrice();
         window.onload = () => {brick_wallet.init();}
     </script>
