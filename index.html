@@ -561,6 +561,12 @@
                 var text = new TextDecoder().decode( bytes );
                 return text;
             },
+            textToHex: text => {
+                var encoded = new TextEncoder().encode( text );
+                return Array.from( encoded )
+                    .map( x => x.toString( 16 ).padStart( 2, "0" ) )
+                    .join( "" );
+            },
             init: async () => {
                 if ( brick_wallet.loaded ) await brick_wallet.waitSomeTime( 3000 );
                 if ( Object.keys( brick_wallet.state.history ).length ) {
@@ -894,7 +900,7 @@
                     });
             }
             $( '.open_send_scanner' ).onclick = () => {scan();}
-            $( '.paste_invoice' ).onclick = async () => {
+            var pasteInvoice = async invoice => {
                 try {
                     html5QrCode
                         .stop()
@@ -905,20 +911,22 @@
                     $( '.close_send_scanner' ).classList.add( "hidden" );
                 } catch ( e ) {}
                 await brick_wallet.waitSomeTime( 10 );
-                var html = `
-                    <p>Enter the invoice you want to pay</p>
-                    <p><input class="ln_invoice_form"></p>
-                    <p><button class="submit_ln_invoice_form" onclick="sessionStorage[ 'ln_invoice' ] = $( '.ln_invoice_form' ).value;sessionStorage[ 'modal_cleared' ] = true;modalVanish();">Submit</button></p>
-                `;
-                sessionStorage.removeItem( "ln_invoice" );
-                sessionStorage.removeItem( "modal_cleared" );
-                var block_til_clear = true;
-                showModal( html, block_til_clear );
-                await getNote( "modal_cleared" );
-                sessionStorage.removeItem( "modal_cleared" );
-                var invoice = sessionStorage[ "ln_invoice" ];
-                sessionStorage.removeItem( "ln_invoice" );
-                if ( !invoice ) return;
+                if ( !invoice ) {
+                    var html = `
+                        <p>Enter the invoice you want to pay</p>
+                        <p><input class="ln_invoice_form"></p>
+                        <p><button class="submit_ln_invoice_form" onclick="sessionStorage[ 'ln_invoice' ] = $( '.ln_invoice_form' ).value;sessionStorage[ 'modal_cleared' ] = true;modalVanish();">Submit</button></p>
+                    `;
+                    sessionStorage.removeItem( "ln_invoice" );
+                    sessionStorage.removeItem( "modal_cleared" );
+                    var block_til_clear = true;
+                    showModal( html, block_til_clear );
+                    await getNote( "modal_cleared" );
+                    sessionStorage.removeItem( "modal_cleared" );
+                    var invoice = sessionStorage[ "ln_invoice" ];
+                    sessionStorage.removeItem( "ln_invoice" );
+                    if ( !invoice ) return;
+                }
                 if ( invoice.startsWith( "lnurl" ) || invoice.startsWith( "LNURL" ) ) {
                     var url = brick_wallet.hexToText( nwcjs.bytesToHex( bech32.bech32.fromWords( bech32.bech32.decode( invoice, 100_000 ).words ) ) );
                     showModal( '<p>processing...</p>' );
@@ -940,6 +948,7 @@
                 send( invoice );
                 showPage( 'wallet_body' );
             }
+            $( '.paste_invoice' ).onclick = async () => {pasteInvoice();}
             $( '.enter_ln_address' ).onclick = async () => {
                 try {
                     html5QrCode
@@ -953,28 +962,22 @@
                 var html = `
                     <p>Enter a lightning address</p>
                     <p><input class="ln_addy_form"></p>
-                    <p>Enter how many sats to send there</p>
-                    <p><input class="ln_addy_amnt"></p>
-                    <p><button class="submit_ln_addy_form" onclick="sessionStorage[ 'ln_addy' ] = $( '.ln_addy_form' ).value;sessionStorage[ 'ln_addy_amnt' ] = $( '.ln_addy_amnt' ).value;sessionStorage[ 'modal_cleared' ] = true;modalVanish();">Submit</button></p>
+                    <p><button class="submit_ln_addy_form" onclick="sessionStorage[ 'ln_addy' ] = $( '.ln_addy_form' ).value;sessionStorage[ 'modal_cleared' ] = true;modalVanish();">Submit</button></p>
                 `;
                 sessionStorage.removeItem( "ln_addy" );
-                sessionStorage.removeItem( "ln_addy_amnt" );
                 sessionStorage.removeItem( "modal_cleared" );
                 var block_til_clear = true;
                 showModal( html, block_til_clear );
                 await getNote( "modal_cleared" );
                 sessionStorage.removeItem( "modal_cleared" );
                 var lnaddy = sessionStorage[ "ln_addy" ];
-                var amount = Number( sessionStorage[ "ln_addy_amnt" ] );
                 sessionStorage.removeItem( "ln_addy" );
-                sessionStorage.removeItem( "ln_addy_amnt" );
-                if ( !lnaddy || !amount ) return;
-                showPage( 'wallet_body' );
-                showModal( `<p>sending...</p>` );
-                var relays = [ "wss://nostrue.com" ];
-                var [ invoice ] = await nwcjs.getZapRequest( lnaddy, amount, relays );
-                var skip_conf = true;
-                send( invoice, skip_conf );
+                if ( !lnaddy ) return;
+                var endpoint = lnaddy.split( "@" );
+                var url = "https://" + endpoint[ 1 ] + "/.well-known/lnurlp/" + endpoint[ 0 ];
+                var words = bech32.bech32.toWords( nwcjs.hexToBytes( brick_wallet.textToHex( url ) ) );
+                var lnurl = bech32.bech32.encode( "lnurl", words, 100_000 );
+                pasteInvoice( lnurl );
             }
         }
         $( '.send' ).onclick = () => {scan()};
