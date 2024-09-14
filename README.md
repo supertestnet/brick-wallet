@@ -24,6 +24,7 @@ It stands for Nostr Wallet Connect and it's a standardized api for controlling l
 - [x] Pay to lightning addresses
 - [x] Pay to lnurl paycodes
 - [x] Receive from lnurl withdraw codes
+- [ ] Label transactions
 - [ ] Automatic price conversion
 - [ ] Built-in base layer wallet
 - [ ] Submarine swaps from base layer
