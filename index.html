@@ -80,6 +80,7 @@
                 if ( isNaN( min ) || isNaN( max ) ) return alert( `the lnurl was invalid, try again` );
                 if ( !Number( min ) || !Number( max ) ) return alert( `the lnurl was invalid, try again` );
                 balance.calculateBalance();
+                var sum = Number( $( '.balance span' ).getAttribute( "data-sats_sum" ) );
                 var html = `
                     <p>Enter an amount to send</p>
                     <p>Min: ${min.toLocaleString()} sats | Max: ${Math.min( max, sum ).toLocaleString()} sats</p>
@@ -1108,7 +1109,8 @@
 
         var balance = {
             html: async () => {
-                var bal_to_show = balance.bal;
+                var sats = balance.bal;
+                var bal_to_show = sats;
                 if ( balance.currency === "usd" ) {
                     bal_to_show = balance.satsToDollars( balance.bal );
                     bal_to_show = bal_to_show.toFixed( 2 );
@@ -1122,7 +1124,7 @@
                     tx_amt.innerText = bal_for_tx_amt + ` ${balance.currency}`
                 });
                 return `
-                    <span onclick="balance.switchCurrency()">${bal_to_show} ${balance.currency}</span>
+                    <span data-sats_sum="${sats}" onclick="balance.switchCurrency()">${bal_to_show} ${balance.currency}</span>
                 `;
             },
             bal: 0,
