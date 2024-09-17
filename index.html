@@ -611,7 +611,6 @@
                 }
                 var old_txs = await nwcjs.listTransactions( brick_wallet.state.nwc_info, null, until, limit, null, null, null, delay_tolerance );
                 var balance_info = await nwcjs.getBalance( brick_wallet.state.nwc_info, delay_tolerance );
-                console.log( balance_info );
                 if ( typeof balance_info === "object" && "result" in balance_info && balance_info[ "result" ] && "balance" in balance_info[ "result" ] ) {
                     balance.setState(()=>{
                         balance.bal = Math.floor( balance_info.result.balance / 1000 );
