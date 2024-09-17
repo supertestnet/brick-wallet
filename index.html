@@ -127,6 +127,7 @@
                 var desc = "NWC Wallet";
                 var delay_tolerance = 10;
                 var invoice_info = await nwcjs.makeInvoice( brick_wallet.state.nwc_info, amnt, desc, delay_tolerance );
+                if ( invoice_info === "timed out" ) return alert( `your wallet encountered an undefined error while processing this withdraw code, try again` );
                 if ( "result_type" in invoice_info && invoice_info[ "result_type" ] !== "make_invoice" ) return alert( `your wallet encountered an undefined error while processing this withdraw code, try again` );
                 if ( "error" in invoice_info && invoice_info[ "error" ] ) return alert( `error processing your withdraw code: ${JSON.stringify( invoice_info[ "error" ] )} -- please try again` );
                 var invoice = invoice_info.result.invoice;
@@ -135,6 +136,7 @@
                     await brick_wallet.waitSomeTime( 3000 );
                     var delay_tolerance = 10;
                     var status_info = await nwcjs.checkInvoice( brick_wallet.state.nwc_info, invoice, delay_tolerance );
+                    if ( status_info === "timed out" ) return alert( `error checking the status of your withdrawal -- please refresh your page` );
                     if ( "error" in status_info && status_info[ "error" ] ) return alert( `error checking the status of your withdrawal: ${JSON.stringify( status_info[ "error" ] )} -- please refresh your page` );
                     if ( !status_info.result.settled_at ) return loop();
                     var new_tx = status_info[ "result" ];
@@ -597,7 +599,7 @@
                 var txs = [];
                 if ( Math.abs( Math.floor( Date.now() / 1000 ) - brick_wallet.state.last_tx ) > 10 ) {
                     var new_txs = await nwcjs.listTransactions( brick_wallet.state.nwc_info, null, Math.floor( Date.now() / 1000 ), 2, null, null, null, delay_tolerance );
-                    if ( new_txs && new_txs.result && new_txs.result.transactions && new_txs.result.transactions.length ) {
+                    if ( new_txs && typeof new_txs === "object" && new_txs.result && new_txs.result.transactions && new_txs.result.transactions.length ) {
                         txs.push( ...new_txs.result.transactions );
                         //recall that old_txs synchronizes historical txs by starting from the present and working backwards. But that is insufficient for querying "all" transactions because there might be "recent" transactions as well. This is why the new_txs lines exists: it *always* queries for the 2 *most recent* transaction. But there is a chance that the user received more than 2 transactions since the last time this function ran (it seems to run every 6 to 10 seconds), so in the following lines I detect if new_txs contains 2 previously-unseen transactions and, if so, I resync -- i.e. I reset brick_wallet.state.last_tx to now so that old_txs will detect the most recent transactions and then start working backward from there
                         var num_already_here = 0;
@@ -609,12 +611,12 @@
                 }
                 var old_txs = await nwcjs.listTransactions( brick_wallet.state.nwc_info, null, until, limit, null, null, null, delay_tolerance );
                 var balance_info = await nwcjs.getBalance( brick_wallet.state.nwc_info, delay_tolerance );
-                if ( !( "error" in balance_info && balance_info[ "error" ] && "message" in balance_info[ "error" ] && balance_info[ "error" ][ "message" ] ) ) {
+                if ( typeof balance_info === "object" && !( "error" in balance_info && balance_info[ "error" ] && "message" in balance_info[ "error" ] && balance_info[ "error" ][ "message" ] ) ) {
                     balance.setState(()=>{
                         balance.bal = Math.floor( balance_info.result.balance / 1000 );
                     });
                 }
-                if ( old_txs && old_txs.result && old_txs.result.transactions && old_txs.result.transactions.length ) txs.push( ...old_txs.result.transactions );
+                if ( old_txs && typeof old_txs === "object" && old_txs.result && old_txs.result.transactions && old_txs.result.transactions.length ) txs.push( ...old_txs.result.transactions );
                 var txs_found = {}
                 txs.forEach( ( new_tx, index ) => {
                     new_tx[ "detail_hidden" ] = true;
@@ -794,6 +796,7 @@
             var loop = async () => {
                 var delay_tolerance = 10;
                 var status = await nwcjs.checkInvoice( brick_wallet.state.nwc_info, invoice, delay_tolerance );
+                if ( status === "timed out" ) return alert( `Your payment was not sent due to an unknown error, please refresh your page` );
                 if ( "error" in status && status[ "error" ] && "message" in status[ "error" ] && status[ "error" ][ "message" ] ) {
                     var err_msg = status[ "error" ][ "message" ];
                     if ( err_msg === "invoice not found" ) err_msg = "Your payment was not sent due to an unknown error, please try again.";
@@ -1004,6 +1007,7 @@
             var desc = "NWC Wallet";
             var delay_tolerance = 10;
             var invoice_info = await nwcjs.makeInvoice( brick_wallet.state.nwc_info, amnt, desc, delay_tolerance );
+            if ( invoice_info === "timed out" ) return alert( `your wallet encountered an undefined error while creating your invoice, try again` );
             if ( "result_type" in invoice_info && invoice_info[ "result_type" ] !== "make_invoice" ) return alert( `your wallet encountered an undefined error while creating your invoice, try again` );
             if ( "error" in invoice_info && invoice_info[ "error" ] ) return alert( `error creating your invoice: ${JSON.stringify( invoice_info[ "error" ] )} -- please try again` );
             var invoice = invoice_info.result.invoice;
@@ -1028,6 +1032,7 @@
                 await brick_wallet.waitSomeTime( 3000 );
                 var delay_tolerance = 10;
                 var status_info = await nwcjs.checkInvoice( brick_wallet.state.nwc_info, invoice, delay_tolerance );
+                if ( status_info === "timed out" ) return alert( `your wallet encountered an undefined error while checking your invoice, try again` );
                 if ( "error" in status_info && status_info[ "error" ] ) return alert( `error checking your invoice status: ${JSON.stringify( status_info[ "error" ] )} -- please refresh your page` );
                 if ( !status_info.result.settled_at ) return loop();
                 var new_tx = status_info[ "result" ];
