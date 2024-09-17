@@ -79,7 +79,6 @@
                 var max = Math.floor( data[ "maxSendable" ] / 1000 );
                 if ( isNaN( min ) || isNaN( max ) ) return alert( `the lnurl was invalid, try again` );
                 if ( !Number( min ) || !Number( max ) ) return alert( `the lnurl was invalid, try again` );
-                balance.calculateBalance();
                 var sum = Number( $( '.balance span' ).getAttribute( "data-sats_sum" ) );
                 var html = `
                     <p>Enter an amount to send</p>
@@ -147,14 +146,12 @@
                     new_txs[ new_tx[ "payment_hash" ] ] = new_tx;
                     brick_wallet.state.history = { ...new_txs, ...brick_wallet.state.history };
                     brick_wallet.parseHistory();
-                    balance.calculateBalance();
                     if ( !$( '.modal' ).classList.contains( "hidden" ) ) {
                         showModal( "<p>success</p>" );
                         await brick_wallet.waitSomeTime( 1000 );
                         if ( !$( '.modal' ).classList.contains( "hidden" ) ) $( '.x_modal' ).click();
                     }
                     brick_wallet.parseHistory();
-                    balance.calculateBalance();
                     showPage( 'wallet_body' );
                     return true;
                 }
@@ -594,20 +591,39 @@
                 }
                 if ( !brick_wallet.state.nwc_string ) return;
                 brick_wallet.state.nwc_info = nwcjs.processNWCstring( brick_wallet.state.nwc_string );
-                balance.calculateBalance();
-                var from = brick_wallet.state.last_tx;
+                var until = brick_wallet.state.last_tx;
                 var delay_tolerance = 10;
-                var txs = await nwcjs.listTransactions( brick_wallet.state.nwc_info, from, null, 10, null, null, null, delay_tolerance );
-                if ( txs && txs.result && txs.result.transactions && txs.result.transactions.length ) {
-                    var new_txs = {}
-                    txs.result.transactions.forEach( new_tx => {
-                        new_tx[ "detail_hidden" ] = true;
-                        new_txs[ new_tx[ "payment_hash" ] ] = new_tx;
+                var limit = 10;
+                var txs = [];
+                if ( Math.abs( Math.floor( Date.now() / 1000 ) - brick_wallet.state.last_tx ) > 10 ) {
+                    var new_txs = await nwcjs.listTransactions( brick_wallet.state.nwc_info, null, Math.floor( Date.now() / 1000 ), 2, null, null, null, delay_tolerance );
+                    if ( new_txs && new_txs.result && new_txs.result.transactions && new_txs.result.transactions.length ) {
+                        txs.push( ...new_txs.result.transactions );
+                        //recall that old_txs synchronizes historical txs by starting from the present and working backwards. But that is insufficient for querying "all" transactions because there might be "recent" transactions as well. This is why the new_txs lines exists: it *always* queries for the 2 *most recent* transaction. But there is a chance that the user received more than 2 transactions since the last time this function ran (it seems to run every 6 to 10 seconds), so in the following lines I detect if new_txs contains 2 previously-unseen transactions and, if so, I resync -- i.e. I reset brick_wallet.state.last_tx to now so that old_txs will detect the most recent transactions and then start working backward from there
+                        var num_already_here = 0;
+                        new_txs.result.transactions.forEach( item => {
+                            if ( !Object.keys( brick_wallet.state.history ).includes( item[ "payment_hash" ] ) ) num_already_here = num_already_here + 1;
+                        });
+                        if ( num_already_here > 1 ) brick_wallet.state.last_tx = Math.floor( Date.now() / 1000 );
+                    }
+                }
+                var old_txs = await nwcjs.listTransactions( brick_wallet.state.nwc_info, null, until, limit, null, null, null, delay_tolerance );
+                var balance_info = await nwcjs.getBalance( brick_wallet.state.nwc_info, delay_tolerance );
+                if ( !( "error" in balance_info && balance_info[ "error" ] && "message" in balance_info[ "error" ] && balance_info[ "error" ][ "message" ] ) ) {
+                    balance.setState(()=>{
+                        balance.bal = Math.floor( balance_info.result.balance / 1000 );
                     });
-                    brick_wallet.state.history = { ...new_txs, ...brick_wallet.state.history };
-                    brick_wallet.state.last_tx = txs.result.transactions[ 0 ].created_at + 1;
+                }
+                if ( old_txs && old_txs.result && old_txs.result.transactions && old_txs.result.transactions.length ) txs.push( ...old_txs.result.transactions );
+                var txs_found = {}
+                txs.forEach( ( new_tx, index ) => {
+                    new_tx[ "detail_hidden" ] = true;
+                    txs_found[ new_tx[ "payment_hash" ] ] = new_tx;
+                });
+                if ( txs.length ) {
+                    brick_wallet.state.history = { ...txs_found, ...brick_wallet.state.history };
+                    brick_wallet.state.last_tx = txs[ txs.length - 1 ].created_at;
                     brick_wallet.parseHistory();
-                    balance.calculateBalance();
                 }
                 brick_wallet.init();
             },
@@ -634,7 +650,6 @@
                         $( '.hist_back' ).disabled = false;
                         brick_wallet.state.offset = brick_wallet.state.offset + 1;
                         brick_wallet.parseHistory();
-                        balance.calculateBalance();
                     }
                     $( '.hist_back' ).onclick = () => {
                         if ( $( '.hist_back' ).disabled ) return;
@@ -643,7 +658,6 @@
                         if ( brick_wallet.state.offset < 0 ) brick_wallet.state.offset = 0;
                         if ( !brick_wallet.state.offset ) $( '.hist_back' ).disabled = true;
                         brick_wallet.parseHistory();
-                        balance.calculateBalance();
                     }
                 }
                 history.forEach( tx => {
@@ -794,7 +808,6 @@
                     new_txs[ new_tx[ "payment_hash" ] ] = new_tx;
                     brick_wallet.state.history = { ...new_txs, ...brick_wallet.state.history };
                     brick_wallet.parseHistory();
-                    balance.calculateBalance();
                     showPage( 'wallet_body' );
                     if ( $( '.modal' ).classList.contains( "hidden" ) ) return;
                     showModal( "<p>paid</p>" );
@@ -1025,7 +1038,6 @@
                 new_txs[ new_tx[ "payment_hash" ] ] = new_tx;
                 brick_wallet.state.history = { ...new_txs, ...brick_wallet.state.history };
                 brick_wallet.parseHistory();
-                balance.calculateBalance();
                 showPage( 'wallet_body' );
                 if ( $( '.modal' ).classList.contains( "hidden" ) ) return;
                 showModal( "<p>paid</p>" );
@@ -1136,6 +1148,7 @@
                     var USDFNX = balance.forex[ currency ];
                     bal_to_show = USDFNX * bal_to_show;
                     bal_to_show = bal_to_show.toFixed( 2 );
+                    bal_to_show = Number( bal_to_show ).toLocaleString();
                     if ( bal_to_show.includes( "." ) && bal_to_show.length - bal_to_show.indexOf( "." ) == 2 ) bal_to_show = bal_to_show + "0";
                 }
                 if ( currency === "sats" ) bal_to_show = Number( bal_to_show ).toLocaleString();
@@ -1155,6 +1168,7 @@
                         var USDFNX = balance.forex[ currency ];
                         bal_for_tx_amt = USDFNX * bal_for_tx_amt;
                         bal_for_tx_amt = bal_for_tx_amt.toFixed( 2 );
+                        bal_for_tx_amt = Number( bal_for_tx_amt ).toLocaleString();
                         if ( bal_for_tx_amt.includes( "." ) && bal_for_tx_amt.length - bal_for_tx_amt.indexOf( "." ) == 2 ) bal_for_tx_amt = bal_for_tx_amt + "0";
                     }
                     if ( currency === "sats" ) bal_for_tx_amt = Number( bal_for_tx_amt ).toLocaleString();
@@ -1222,17 +1236,17 @@
                 callback();
                 balance.render();
             },
-            calculateBalance: () => {
-                balance.setState(() => {
-                    var sum = 0;
-                    Object.keys( brick_wallet.state.history ).forEach( txid => {
-                        var tx = brick_wallet.state.history[ txid ];
-                        if ( tx.type === "incoming" ) sum = sum + tx[ "amount" ];
-                        else sum = sum - ( tx[ "amount" ] + tx[ "fees_paid" ] );
-                    });
-                    balance.bal = Math.floor( sum / 1000 );
-                });
-            },
+            // calculateBalance: () => {
+            //     balance.setState(() => {
+            //         var sum = 0;
+            //         Object.keys( brick_wallet.state.history ).forEach( txid => {
+            //             var tx = brick_wallet.state.history[ txid ];
+            //             if ( tx.type === "incoming" ) sum = sum + tx[ "amount" ];
+            //             else sum = sum - ( tx[ "amount" ] + tx[ "fees_paid" ] );
+            //         });
+            //         balance.bal = Math.floor( sum / 1000 );
+            //     });
+            // },
             addCurrency: item => {
                 item.onclick = () => {
                     var btn = document.createElement( "button" );
@@ -1334,6 +1348,7 @@
         }
         walletSaver();
         brick_wallet.state.offset = 0;
+        brick_wallet.state.last_tx = Math.floor( Date.now() / 1000 );
         if ( "selected_currencies" in brick_wallet.state && brick_wallet.state.selected_currencies.length ) balance.currencies = brick_wallet.state.selected_currencies;
         if ( "supported_currencies" in brick_wallet.state && brick_wallet.state.supported_currencies.length ) balance.supported_currencies = brick_wallet.state.supported_currencies;
         Object.keys( brick_wallet.state.history ).forEach( txid => {
