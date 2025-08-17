@@ -554,6 +554,13 @@
                     brick_wallet.state.last_tx = txs[ txs.length - 1 ].created_at;
                     brick_wallet.parseHistory();
                 }
+                var income = 0;
+                var expenses = 0;
+                Object.keys( brick_wallet.state.history ).forEach( item => {
+                    if ( item.startsWith( "i" ) ) income = income + brick_wallet.state.history[ item ].amount;
+                    else expenses = expenses + brick_wallet.state.history[ item ].amount;
+                });
+                balance.setState(()=>{balance.bal = Math.floor( ( income - expenses ) / 1000 ) });
                 brick_wallet.init();
             },
             parseHistory: () => {
