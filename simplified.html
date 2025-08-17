@@ -780,8 +780,7 @@
                 showPage( 'wallet_body' );
                 if ( $( '.modal' ).classList.contains( "hidden" ) ) return;
                 showModal( "<p>paid</p>" );
-                await brick_wallet.waitSomeTime( 1000 );
-                if ( !$( '.modal' ).classList.contains( "hidden" ) ) $( '.x_modal' ).click();
+                setTimeout( () => {if ( !$( '.modal' ).classList.contains( "hidden" ) ) $( '.x_modal' ).click();}, 1000 );
                 return true;
             },
             getInvoice: async amnt => {
