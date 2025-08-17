@@ -127,21 +127,21 @@
                 var invoice = await brick_wallet.getInvoice( amnt );
                 $( '.invoice_box' ).innerText = invoice;
                 await brick_wallet.waitSomeTime( 3000 );
-                brick_wallet.processInvoice( invoice );
-                if ( !$( '.modal' ).classList.contains( "hidden" ) ) {
-                    showModal( "<p>success</p>" );
-                    await brick_wallet.waitSomeTime( 1000 );
-                    if ( !$( '.modal' ).classList.contains( "hidden" ) ) $( '.x_modal' ).click();
-                }
-                brick_wallet.parseHistory();
-                showPage( 'wallet_body' );
                 var callback = data[ "callback" ] + "?pr=" + invoice + "&k1=" + data[ "k1" ];
                 var withdraw_data = await fetch( callback );
                 try {
                     var {status: success} = await withdraw_data.json();
-                    if ( !success || success !== "OK" ) alert( `There was an unknown problem processing your withdrawal, please try again` );
+                    if ( !success || success !== "OK" ) throw( 'unknown error' );
+                    brick_wallet.processInvoice( invoice );
+                    if ( !$( '.modal' ).classList.contains( "hidden" ) ) {
+                        showModal( "<p>success</p>" );
+                        await brick_wallet.waitSomeTime( 1000 );
+                        if ( !$( '.modal' ).classList.contains( "hidden" ) ) $( '.x_modal' ).click();
+                    }
+                    brick_wallet.parseHistory();
+                    showPage( 'wallet_body' );
                 } catch ( e ) {
-                    alert( `There was an unknown problem processing your withdrawal, please try again` );
+                    alert( `There was an unknown error processing your withdrawal, please try again` );
                 }
             }
         }
@@ -767,7 +767,7 @@
                 await brick_wallet.waitSomeTime( 3000 );
                 brick_wallet.processInvoice( invoice );
             },
-            processInvoice: async invoice => {
+            processInvoice: invoice => {
                 var payment_hash = brick_wallet.getInvoicePmthash( invoice );
                 var amount = Number( bolt11.decode( invoice ).millisatoshis );
                 var new_tx = {invoice, bolt11: invoice, amount, type: "incoming", preimage: "0".repeat( 64 ), payment_hash, fees_paid: 0, settled_at: Math.floor( Date.now() / 1000 )}
