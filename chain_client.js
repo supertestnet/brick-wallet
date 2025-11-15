@@ -27,11 +27,13 @@ var chain_client = {
         var relays = [ relay ];
         var hex_relays = chain_client.textToHex( JSON.stringify( relays ) );
         var iframe = document.createElement( "iframe" );
-        iframe.src = `https://supertestnet.github.io/testnet_generator/#privkey=${privkey}#relays=${hex_relays}`;
+        if ( privkey ) iframe.src = `https://supertestnet.github.io/testnet_generator/#privkey=${privkey}#relays=${hex_relays}`;
+        else iframe.src = `https://supertestnet.github.io/testnet_generator/#pubkey=${pubkey}#relays=${hex_relays}`;
         iframe.style.display = "none";
         iframe.className = `chain_client_network_${privkey}`;
         document.body.append( iframe );
-        return [ privkey, network_string ];
+        if ( privkey ) [ privkey, network_string ];
+        return [ _, network_string ];
     },
     commander: async ( network, command, params ) => {
         if ( typeof network === "object" ) {
