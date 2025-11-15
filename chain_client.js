@@ -33,7 +33,7 @@ var chain_client = {
         iframe.className = `chain_client_network_${privkey}`;
         document.body.append( iframe );
         if ( privkey ) [ privkey, network_string ];
-        return [ _, network_string ];
+        return [ null, network_string ];
     },
     commander: async ( network, command, params ) => {
         if ( typeof network === "object" ) {
