@@ -1,4 +1,4 @@
-//dependencies:
+// dependencies:
 // https://supertestnet.github.io/bankify/super_nostr.js
 // https://bundle.run/noble-secp256k1@1.2.14
 var chain_client = {
