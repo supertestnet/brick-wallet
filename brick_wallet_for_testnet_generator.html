@@ -718,7 +718,7 @@
                         scriptPubKey: tapscript.Address.toScriptPubKey( address ),
                     },{
                         value: sum_of_inputs - amount,
-                        scriptPubKey: tapscript.Address.toScriptPubKey( address ),
+                        scriptPubKey: tapscript.Address.toScriptPubKey( change_address ),
                     }],
                 }
                 var subtractFeesFromOutputs = ( psbt, feerate ) => {
@@ -1138,7 +1138,7 @@
             }
             walletSaver();
         }
-        walletSaver();
+        // walletSaver();
         brick_wallet.state.offset = 0;
         brick_wallet.state.last_tx = Math.floor( Date.now() / 1000 );
         if ( "selected_currencies" in brick_wallet.state && brick_wallet.state.selected_currencies.length ) balance.currencies = brick_wallet.state.selected_currencies;
