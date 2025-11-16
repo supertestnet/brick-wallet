@@ -1,0 +1,1229 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no">
+    <title>Brick Wallet</title>
+    <link rel="shortcut icon" type="image/x-icon" href="https://supertestnet.github.io/brick-wallet/favicon.ico">
+    <script src="https://cdn.jsdelivr.net/gh/mebjas/html5-qrcode@master/minified/html5-qrcode.min.js"></script>
+    <script src="https://supertestnet.github.io/brick-wallet/chain_client.js"></script>
+    <script src="https://supertestnet.github.io/bitcoin-chess/js/qrcode.js"></script>
+    <script src="https://supertestnet.github.io/bitcoin-chess/js/bolt11.js"></script>
+    <script src="https://supertestnet.github.io/bankify/super_nostr.js"></script>
+    <script src="https://unpkg.com/@cmdcode/tapscript@1.4.0"></script>
+    <script src="https://bundle.run/browserify-cipher@1.0.1"></script>
+    <script src="https://bundle.run/noble-secp256k1@1.2.14"></script>
+    <script src="https://bundle.run/bech32@2.0.0"></script>
+    <script>
+        var modalVanish = () => {
+            $( ".black-bg" ).classList.add( "hidden" );
+            $( ".modal" ).classList.add( "hidden" );
+        }
+        var showModal = ( content, block_til_clear ) => {
+            if ( block_til_clear ) var fn = `modalVanish();sessionStorage[ 'modal_cleared' ] = true;`; else var fn = `modalVanish();`;
+            $( ".modal" ).innerHTML = `<div class="x_modal" style="position: absolute;right: 1rem;top: 0.5rem;font-size: 2rem; cursor: pointer; color: black;" onclick="${fn}">&times;</div>`;
+            $( ".modal" ).innerHTML += `<div style="overflow-y: auto; max-height: 80vh; margin-top: 1.5rem;">${content}</div>`;
+            $( ".black-bg" ).classList.remove( "hidden" );
+            $( ".modal" ).classList.remove( "hidden" );
+        }
+        var showToast = content => {
+            $( '.toast' ).innerHTML = content;
+            $( '.toast' ).classList.add( "show" );
+            setTimeout( () => $( '.toast' ).classList.remove( "show" ), 3000 );
+        }
+        var createQR = content => {
+            var dataUriPngImage = document.createElement( "img" ),
+            s = QRCode.generatePNG( content, {
+                ecclevel: "M",
+                format: "html",
+                fillcolor: "#FFFFFF",
+                textcolor: "#000000",
+                margin: 4,
+                modulesize: 8,
+            });
+            dataUriPngImage.src = s;
+            dataUriPngImage.className = "qr_code";
+            dataUriPngImage.style.width = "100%";
+            return dataUriPngImage;
+        }
+        sessionStorage.removeItem( "yes_send" );
+        sessionStorage.removeItem( "modal_cleared" );
+        async function getNote( item ) {
+            async function isNoteSetYet( note_i_seek ) {
+                return new Promise( function( resolve, reject ) {
+                    if ( !note_i_seek ) {
+                        setTimeout( async function() {
+                            var msg = await isNoteSetYet( sessionStorage[ item ] );
+                            resolve( msg );
+                        }, 100 );
+                    } else {
+                        resolve( note_i_seek );
+                    }
+                });
+            }
+            async function getTimeoutData() {
+                var note_i_seek = await isNoteSetYet( sessionStorage[ item ] );
+                return note_i_seek;
+            }
+            var returnable = await getTimeoutData();
+            return returnable;
+        }
+        var getData = url => {
+            return new Promise( async function( resolve, reject ) {
+                function inner_get( url ) {
+                    var xhttp = new XMLHttpRequest();
+                    xhttp.open( "GET", url, true );
+                    xhttp.send();
+                    return xhttp;
+                }
+                var data = inner_get( url );
+                data.onerror = function( e ) {
+                    resolve( "error" );
+                }
+                async function isResponseReady() {
+                    return new Promise( function( resolve2, reject ) {
+                        if ( !data.responseText || data.readyState != 4 ) {
+                            setTimeout( async function() {
+                                var msg = await isResponseReady();
+                                resolve2( msg );
+                            }, 1 );
+                        } else {
+                            resolve2( data.responseText );
+                        }
+                    });
+                }
+                var returnable = await isResponseReady();
+                resolve( returnable );
+            });
+        }
+
+        var getBitcoinPriceFromCoinbase = async () => {
+            var data = await getData( "https://api.coinbase.com/v2/prices/BTC-USD/spot" );
+            if ( data == "error" ) return 0;
+            var json = JSON.parse( data );
+            var price = json[ "data" ][ "amount" ];
+            return price;
+        }
+
+        var getBitcoinPriceFromKraken = async () => {
+            var data = await getData( "https://api.kraken.com/0/public/Ticker?pair=XBTUSD" );
+            if ( data == "error" ) return 0;
+            var json = JSON.parse( data );
+            var price = json[ "result" ][ "XXBTZUSD" ][ "a" ][ 0 ];
+            return price;
+        }
+
+        var getBitcoinPriceFromGemini = async () => {
+            var data = await getData( "https://api.gemini.com/v2/ticker/BTCUSD" );
+            if ( data == "error" ) return 0;
+            var json = JSON.parse( data );
+            var price = json[ "bid" ];
+            return price;
+        }
+
+        var getBitcoinPriceFromCoinGecko = async () => {
+            var data = await getData( "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&precision=2" );
+            if ( data == "error" ) return 0;
+            var json = JSON.parse( data );
+            var price = json[ "bitcoin" ][ "usd" ];
+            return price;
+        }
+
+        var getBitcoinPrice = async () => {
+            var prices = [];
+            var cbprice = await getBitcoinPriceFromCoinbase();
+            var kprice = await getBitcoinPriceFromKraken();
+            var cdprice = 0;
+            var gprice = await getBitcoinPriceFromGemini();
+            var cgprice = await getBitcoinPriceFromCoinGecko();
+            prices.push( Number( cbprice ), Number( kprice ), Number( cdprice ), Number( gprice ), Number( cgprice ) );
+            prices.sort();
+            return prices[ 2 ];
+        }
+    </script>
+    <style>
+        * {
+            box-sizing: border-box;
+            font-size: 1.15rem;
+            font-family: Arial, sans-serif;
+        }
+        html {
+            max-width: 800px;
+            padding: 3rem 1rem;
+            margin: auto;
+            line-height: 1.25;
+            padding: 0;
+        }
+        body {
+            margin: 3rem 1rem;
+        }
+        h1 {
+            font-size: 2rem;
+        }
+        h2 {
+            font-size: 1.5rem;
+        }
+        input {
+            line-height: 1.25;
+            width: 100%;
+            height: 1.8rem;
+            font-size: 1.15rem;
+            border: 1px solid grey;
+        }
+        .hidden {
+            display: none !important;
+        }
+        .balance span {
+            cursor: pointer;
+        }
+        .wallet_body, .send_page, .receive_page {
+            max-width: 15rem;
+            margin: auto;
+            word-wrap: break-word;
+        }
+        .send_page, .receive_page {
+            max-width: 30rem;
+        }
+        button {
+            background-color: #77a8fc;
+            color: white !important;
+            font-weight: bold;
+            padding: .2rem;
+            width: 7rem;
+            font-size: 80%;
+        }
+        .hist_btn {
+            width: 2rem;
+        }
+        .hist_btn:disabled {
+            background-color: #cccccc;
+        }
+        .wallet_btns, .send_scanner_btns {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-around;
+        }
+        .send_scanner_btns button {
+            margin: .5rem;
+        }
+        .receive_btns {
+            text-align: center;
+        }
+        .address_box {
+            margin-top: 1rem;
+            border: 1px solid black;
+            color: black;
+            font-family: monospace;
+            padding: 0.5rem;
+            max-width: 15rem;
+        }
+        .hist_btns {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+        }
+        .noselect {
+            -webkit-touch-callout: none; /* iOS Safari */
+            -webkit-user-select: none; /* Safari */
+            -khtml-user-select: none; /* Konqueror HTML */
+            -moz-user-select: none; /* Old versions of Firefox */
+            -ms-user-select: none; /* Internet Explorer/Edge */
+            user-select: none; /* Non-prefixed version, currently
+            supported by Chrome, Edge, Opera and Firefox */
+        }
+        .arrow {
+            display: flex;
+            padding: .5rem;
+            border-radius: 50%;
+            width: 2rem;
+            height: 2rem;
+            justify-content: center;
+            align-items: center;
+        }
+        .arrow.incoming_arrow {
+            border: 1px solid #52b354;
+        }
+        .arrow.outgoing_arrow {
+            border: 1px solid #77a8fc;
+        }
+        .history > :first-child {
+            border-top: 1px solid black;
+        }
+        .clickable_tx_parent {
+            border-bottom: 1px solid black;
+        }
+        .incoming_tx, .outgoing_tx {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: .5rem;
+            padding-top: .5rem;
+            cursor: pointer;
+        }
+        .incoming_tx {
+            color: #52b354;
+        }
+        .outgoing_tx {
+            color: #77a8fc;
+        }
+        .hidable_tx_data {
+            background-color: #cccccc;
+            padding: .5rem;
+            margin-bottom: .5rem;
+        }
+        .tx_detail {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: .5rem 0;
+        }
+        .tx_detail_big {
+            margin: .5rem 0;
+        }
+        .disconnect {
+            margin: 1rem 0rem;
+            width: 100%;
+        }
+        .supported_currencies button,
+        .selected_currencies button {
+            margin: .5rem;
+        }
+        .black-bg {
+            width: 100%;
+            position: fixed;
+            top: 0;
+            left: 0;
+            background-color: black;
+            opacity: .5;
+            width: 100vw;
+            height: 100vh;
+        }
+        .modal {
+            position: fixed;
+            box-sizing: border-box;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%,-50%);
+            width: 90%;
+            max-width: 560px;
+            background-color: white;
+            border-radius: 1rem;
+            padding: 20px;
+            color: black;
+            text-align: center;
+            word-wrap: break-word;
+        }
+        .modal * {
+            color: black;
+        }
+        .modal input, .modal textarea {
+            max-width: 90%;
+        }
+        .copy_box {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 2.2rem;
+        }
+        .copy_addy {
+            width: 100%;
+            max-width: 78%;
+            word-wrap: break-word;
+            background-color: #cccccc;
+            border: 1px solid black;
+            padding: .3rem;
+            height: 100%;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: block;
+        }
+        .copy_btn {
+            width: 100%;
+            max-width: 18%;
+            text-align: center;
+            background-color: #cccccc;
+            border: 1px solid black;
+            padding: .3rem;
+            height: 100%;
+            padding-top: 3%;
+            cursor: pointer;
+        }
+        .toast {
+            box-sizing: border-box;
+            visibility: hidden;
+            width: 250px;
+            margin-left: -125px;
+            background-color: rgb(97, 235, 52);
+            color: white;
+            text-align: center;
+            border-radius: 2px;
+            padding: 16px;
+            position: fixed;
+            z-index: 1;
+            left: 50%;
+            bottom: 30px;
+        }
+
+        .toast.show {
+            visibility: visible;
+            -webkit-animation: fadein 0.5s, fadeout 0.5s 2.5s;
+            animation: fadein 0.5s, fadeout 0.5s 2.5s;
+        }
+
+        @-webkit-keyframes fadein {
+            from {bottom: 0; opacity: 0;}
+            to {bottom: 30px; opacity: 1;}
+        }
+
+        @keyframes fadein {
+            from {bottom: 0; opacity: 0;}
+            to {bottom: 30px; opacity: 1;}
+        }
+
+        @-webkit-keyframes fadeout {
+            from {bottom: 30px; opacity: 1;}
+            to {bottom: 0; opacity: 0;}
+        }
+
+        @keyframes fadeout {
+            from {bottom: 30px; opacity: 1;}
+            to {bottom: 0; opacity: 0;}
+        }
+        @media screen and (max-width: 600px) {
+        }
+    </style>
+    <script>
+        var $ = document.querySelector.bind( document );
+        var $$ = document.querySelectorAll.bind( document );
+        var url_params = new URLSearchParams( window.location.search );
+        var url_keys = url_params.keys();
+        var $_GET = {}
+        for ( var key of url_keys ) $_GET[ key ] = url_params.get( key );
+        var hash_arr = window.location.href.substring( window.location.href.indexOf( "#" ) ).split( "#" );
+        hash_arr.splice( 0, 1 );
+        var $_HASH = {}
+        hash_arr.forEach( item => {
+            var vals = item.split( "=" );
+            $_HASH[ vals[ 0 ] ] = vals[ 1 ];
+        });
+</script>
+</head>
+<body>
+    <div class="send_page hidden">
+        <div id="send_scanner"></div>
+        <p class="send_scanner_btns"><button class="paste_address">Paste address</button><button class="cancel_send_scanner">Cancel</button><button class="close_send_scanner">Close scanner</button><button class="open_send_scanner hidden">Open scanner</button></p>
+    </div>
+    <div class="receive_page hidden">
+        <div class="receive_data"></div>
+        <div class="receive_btns">
+            <p><button class="cancel_receive">Cancel</button></p>
+            <p><button class="five_from_faucet">Receive 5 btc from testnet faucet</button></p>
+        </div>
+    </div>
+    <div class="wallet_body">
+        <center><p class="balance" style="font-weight: bold;">loading balance...</p></center></h1>
+        <div class="wallet_btns">
+            <button class="send">Send</button>
+            <button class="receive">Receive</button>
+        </div>
+        <center><div class="address_box hidden"></div></center>
+        <!-- <center><p style="font-weight: bold;">History</p></center> -->
+        <br>
+        <center><div class="hist_btns hidden"><button class="hist_btn hist_back"><</button><button class="hist_btn hist_fwd">></button></div></center>
+        <center><div class="history">loading history...</div></center>
+        <center><button class="disconnect">Disconnect wallet</button></center>
+    </div>
+    <script>
+        var stop_the_save;
+        var brick_wallet = {
+            network: "testnet",
+            state: {
+                last_tx: 1,
+                offset: 0,
+                history: [],
+                selected_currencies: [],
+                supported_currencies: [],
+                addresses: {},
+                utxos: {},
+            },
+            loaded: false,
+            waitSomeTime: async milliseconds => new Promise( resolve => setTimeout( resolve, milliseconds ) ),
+            hexToBytes: hex => Uint8Array.from( hex.match( /.{1,2}/g ).map( byte => parseInt( byte, 16 ) ) ),
+            bytesToHex: bytes => bytes.reduce( ( str, byte ) => str + byte.toString( 16 ).padStart( 2, "0" ), "" ),
+            getInvoicePmthash: invoice => {
+                var decoded = bolt11.decode( invoice );
+                var i; for ( i=0; i<decoded[ "tags" ].length; i++ ) {
+                    if ( decoded[ "tags" ][ i ][ "tagName" ] == "payment_hash" ) var pmthash = decoded[ "tags" ][ i ][ "data" ].toString();
+                }
+                return pmthash;
+            },
+            hexToText: hex => {
+                var bytes = new Uint8Array( Math.ceil( hex.length / 2 ) );
+                for ( var i = 0; i < hex.length; i++ ) bytes[ i ] = parseInt( hex.substr( i * 2, 2 ), 16 );
+                var text = new TextDecoder().decode( bytes );
+                return text;
+            },
+            textToHex: text => {
+                var encoded = new TextEncoder().encode( text );
+                return Array.from( encoded )
+                    .map( x => x.toString( 16 ).padStart( 2, "0" ) )
+                    .join( "" );
+            },
+            init: async () => {
+                if ( brick_wallet.loaded ) await brick_wallet.waitSomeTime( 3000 );
+                if ( Object.keys( brick_wallet.state.history ).length ) {
+                    if ( !brick_wallet.loaded ) brick_wallet.parseHistory();
+                } else {
+                    if ( brick_wallet.loaded ) $( '.history' ).innerText = 'No history';
+                }
+                brick_wallet.loaded = true;
+                var txs = [];
+                var txs_found = {}
+                txs.forEach( ( new_tx, index ) => {
+                    new_tx[ "detail_hidden" ] = true;
+                    txs_found[ new_tx[ "payment_hash" ] ] = new_tx;
+                });
+                if ( txs.length ) {
+                    brick_wallet.state.history = { ...txs_found, ...brick_wallet.state.history };
+                    brick_wallet.state.last_tx = txs[ txs.length - 1 ].created_at;
+                    brick_wallet.parseHistory();
+                }
+                var income = 0;
+                var expenses = 0;
+                Object.keys( brick_wallet.state.history ).forEach( item => {
+                    if ( item.startsWith( "i" ) ) income = income + brick_wallet.state.history[ item ].amount;
+                    else expenses = expenses + brick_wallet.state.history[ item ].amount + brick_wallet.state.history[ item ].fees_paid;
+                });
+                balance.setState(()=>{balance.bal = income - expenses });
+                brick_wallet.init();
+            },
+            parseHistory: () => {
+                var history = [];
+                Object.keys( brick_wallet.state.history ).forEach( txid => history.push( brick_wallet.state.history[ txid ] ) );
+                history.sort( ( a, b ) => b[ "settled_at" ] - a[ "settled_at" ] );
+                var remove_before = brick_wallet.state.offset * 5;
+                history.splice( 0, remove_before );
+                history.length = 5;
+                var html = ``;
+                if ( history.length ) {
+                    $( '.hist_btns' ).classList.remove( "hidden" );
+                    var len_of_hist = Object.keys( brick_wallet.state.history ).length;
+                    if ( ( brick_wallet.state.offset + 1 ) * 5 >= len_of_hist ) $( '.hist_fwd' ).disabled = true;
+                    else $( '.hist_fwd' ).disabled = false;
+                    if ( !brick_wallet.state.offset ) $( '.hist_back' ).disabled = true;
+                    else $( '.hist_back' ).disabled = false;
+                    if ( brick_wallet.state.offset < 0 ) brick_wallet.state.offset = 0;
+                    $( '.hist_fwd' ).onclick = () => {
+                        if ( $( '.hist_fwd' ).disabled ) return;
+                        var len_of_hist = Object.keys( brick_wallet.state.history ).length;
+                        if ( ( brick_wallet.state.offset + 2 ) * 5 >= len_of_hist ) $( '.hist_fwd' ).disabled = true;
+                        $( '.hist_back' ).disabled = false;
+                        brick_wallet.state.offset = brick_wallet.state.offset + 1;
+                        brick_wallet.parseHistory();
+                    }
+                    $( '.hist_back' ).onclick = () => {
+                        if ( $( '.hist_back' ).disabled ) return;
+                        $( '.hist_fwd' ).disabled = false;
+                        brick_wallet.state.offset = brick_wallet.state.offset - 1;
+                        if ( brick_wallet.state.offset < 0 ) brick_wallet.state.offset = 0;
+                        if ( !brick_wallet.state.offset ) $( '.hist_back' ).disabled = true;
+                        brick_wallet.parseHistory();
+                    }
+                }
+                history.forEach( tx => {
+                    if ( !tx ) return;
+                    var txid = tx[ "txid" ];
+                    var invoice;
+                    if ( "address" in tx ) address = tx[ "address" ];
+                    if ( $( '.address_box' ) && $( '.address_box' ).innerText === invoice ) {
+                        if ( !$( '.modal' ).classList.contains( "hidden" ) ) $( '.x_modal' ).click();
+                        $( '.address_box' ).innerText = "";
+                    }
+                    var arrow = `<span class="noselect arrow incoming_arrow">&#8601;</span>`;
+                    var incoming_or_outgoing = "incoming_tx";
+                    if ( tx[ "type" ] === "outgoing" ) {
+                        arrow = `<span class="noselect arrow outgoing_arrow">&#8599;</span>`;
+                        incoming_or_outgoing = "outgoing_tx";
+                    }
+                    var amount = tx[ "amount" ];
+                    var amount_plus_fees = amount + tx[ "fees_paid" ];
+                    var self_send_div = "";
+                    if ( tx[ "type" ] === "outgoing" && Object.keys( brick_wallet.state.addresses ).includes( tx[ "address" ] ) ) {
+                        self_send_div = `
+                            <div class="tx_detail">
+                                <p>Self send</p>
+                                <p class="self_send_div">true</p>
+                            </div>
+                        `;
+                        amount_plus_fees = tx[ "fees_paid" ];
+                    }
+                    var desc_div = `
+                        <div class="tx_detail_big">
+                            <p style="font-weight: bold;">Description</p>
+                            <p class="desc_div"></p>
+                        </div>
+                    `;
+                    var address_div = "";
+                    if ( "address" in tx && tx[ "address" ] ) address_div = `
+                        <div class="tx_detail_big">
+                            <p style="font-weight: bold;">Address</p>
+                            <p>${tx[ "address" ]}</p>
+                        </div>
+                    `;
+                    var txid_div = "";
+                    if ( "txid" in tx && tx[ "txid" ] ) txid_div = `
+                        <div class="tx_detail_big">
+                            <p style="font-weight: bold;">Txid</p>
+                            <p>${tx[ "txid" ]}</p>
+                        </div>
+                    `;
+                    var hidden_or_shown = tx[ "detail_hidden" ] ? "hidden" : "";
+                    var identifier = tx[ "type" ] === "incoming" ? "i_" + txid : "o_" + txid;
+                    var txdata = `
+                        <div class="clickable_tx_parent" data-txid="${txid}" data-identifier="${identifier}">
+                            <div class="clickable_tx ${incoming_or_outgoing}">
+                                ${arrow}
+                                <span class="noselect tx_amt" data-sats="${amount_plus_fees}">${amount_plus_fees} sats</span>
+                            </div>
+                            <div class="hidable_tx_data ${hidden_or_shown}">
+                                <div class="tx_detail">
+                                    <span>Amount</span><span>${amount} sats</span>
+                                </div>
+                                <div class="tx_detail">
+                                    <span>Fees</span><span>${tx[ "fees_paid" ]} sats</span>
+                                </div>
+                                <div class="tx_detail">
+                                    <span>Time</span><div>${new Date( tx[ "settled_at" ] * 1000 ).toLocaleDateString( "en-CA" ) + "<br>" + new Date( tx[ "settled_at" ] * 1000 ).toLocaleTimeString()}</div>
+                                </div>
+                                <div class="tx_detail">
+                                    <span>Confirmed</span><span>${!!tx[ "confirmed" ]}</span>
+                                </div>
+                                ${self_send_div}
+                                ${desc_div}
+                                ${txid_div}
+                                ${address_div}
+                            </div>
+                        </div>
+                    `;
+                    html = html + txdata;
+                });
+                var div = document.createElement( "div" );
+                div.innerHTML = html;
+                history.forEach( ( tx, index ) => {
+                    if ( !tx ) return;
+                    div.getElementsByClassName( "desc_div" )[ index ].innerText = tx[ "description" ] || "[No description]"
+                });
+                $( '.history' ).innerHTML = '';
+                $( '.history' ).append( div );
+                $$( '.clickable_tx' ).forEach( item => {
+                    item.onclick = () => {
+                        var parent = item.parentElement;
+                        var identifier = parent.getAttribute( "data-identifier" );
+                        var hidable = parent.getElementsByClassName( "hidable_tx_data" )[ 0 ];
+                        if ( !hidable.classList.contains( "hidden" ) ) {
+                            brick_wallet.state.history[ identifier ][ "detail_hidden" ] = true;
+                            hidable.classList.add( "hidden" );
+                        } else {
+                            brick_wallet.state.history[ identifier ][ "detail_hidden" ] = false;
+                            hidable.classList.remove( "hidden" );
+                        }
+                    }
+                });
+                var income = 0;
+                var expenses = 0;
+                Object.keys( brick_wallet.state.history ).forEach( item => {
+                    if ( item.startsWith( "i" ) ) income = income + brick_wallet.state.history[ item ].amount;
+                    else expenses = expenses + brick_wallet.state.history[ item ].amount + brick_wallet.state.history[ item ].fees_paid;
+                });
+                balance.setState(()=>{balance.bal = income - expenses });
+            },
+            send: async address => {
+                var conf = true;
+                if ( !address ) return;
+                var amount = Number( prompt( `enter the amount you want to send (in sats)` ) );
+                if ( amount < 546 ) return alert( `you cannot send an amount less than 546 sats` );
+                $( '.address_box' ).innerText = address;
+                showModal( `<p>sending...</p>` );
+                await brick_wallet.waitSomeTime( 2000 );
+                var delay_tolerance = 10;
+                var [ txid, vout, fees_paid, change_address, txid, change_vout, change_amnt, change_privkey ] = await brick_wallet.getTxidVoutAndFeesPaid( address, amount );
+                var new_txs = {}
+                var new_tx = {address, txid, vout, amount, type: "outgoing", fees_paid, settled_at: Math.floor( Date.now() / 1000 ), confirmed: false}
+                new_tx[ "detail_hidden" ] = true;
+                new_txs[ "o_" + new_tx[ "txid" ] ] = new_tx;
+                brick_wallet.state.history = { ...new_txs, ...brick_wallet.state.history };
+                var skip_history = true;
+                brick_wallet.processPayment( change_address, txid, change_vout, change_amnt, change_privkey, skip_history );
+                showPage( 'wallet_body' );
+                if ( $( '.modal' ).classList.contains( "hidden" ) ) return;
+                showModal( `<p>paid</p>` );
+                await brick_wallet.waitSomeTime( 1000 );
+                if ( !$( '.modal' ).classList.contains( "hidden" ) ) $( '.x_modal' ).click();
+            },
+            processPayment: ( address, txid, vout, amount, privkey, skip_history ) => {
+                var new_tx = {address, txid, vout, amount, type: "incoming", fees_paid: 0, settled_at: Math.floor( Date.now() / 1000 ), confirmed: false}
+                var new_txs = {}
+                new_tx[ "detail_hidden" ] = true;
+                new_txs[ "i_" + new_tx[ "txid" ] ] = new_tx;
+                if ( !skip_history ) brick_wallet.state.history = { ...new_txs, ...brick_wallet.state.history };
+                var utxo_id = "u_" + super_nostr.getPrivkey().substring( 0, 16 )
+                brick_wallet.state.utxos[ utxo_id ] = {
+                    utxo_id,
+                    txid,
+                    vout,
+                    amnt: amount,
+                    skey: privkey,
+                    addy: address,
+                }
+                brick_wallet.parseHistory();
+                showPage( 'wallet_body' );
+                if ( $( '.modal' ).classList.contains( "hidden" ) ) return;
+                showModal( "<p>paid</p>" );
+                setTimeout( () => {if ( !$( '.modal' ).classList.contains( "hidden" ) ) $( '.x_modal' ).click();}, 1000 );
+                return true;
+            },
+            getInvoice: async amnt => {
+                throw( `batteries not included -- you must replace this function with one that actually gets an invoice` );
+                // prompt( `enter an invoice for this amount: ${amnt} sats` );
+            },
+            getTxidVoutAndFeesPaid: async ( address, amount ) => {
+                var inputs_ill_use = [];
+                var sum_of_inputs = 0;
+                Object.keys( brick_wallet.state.utxos ).every( utxo_id => {
+                    var utxo = brick_wallet.state.utxos[ utxo_id ];
+                    sum_of_inputs = sum_of_inputs + utxo[ "amnt" ];
+                    inputs_ill_use.push( utxo_id );
+                    if ( sum_of_inputs < amount + 1_000 ) return true;
+                });
+                var vin = [];
+                inputs_ill_use.forEach( utxo_id => {
+                    var utxo = brick_wallet.state.utxos[ utxo_id ];
+                    vin.push({
+                        txid: utxo.txid,
+                        vout: utxo.vout,
+                        witness: [ "a".repeat( 128 ) ],
+                        prevout: {
+                            value: utxo.amnt,
+                            scriptPubKey: tapscript.Address.toScriptPubKey( utxo.addy ),
+                        }
+                    });
+                });
+                var change_address = Object.keys( brick_wallet.state.addresses )[ 0 ];
+                var change_privkey = brick_wallet.state.addresses[ change_address ].privkey;
+                var psbt = {
+                    vin,
+                    vout: [{
+                        value: amount,
+                        scriptPubKey: tapscript.Address.toScriptPubKey( address ),
+                    },{
+                        value: sum_of_inputs - amount,
+                        scriptPubKey: tapscript.Address.toScriptPubKey( address ),
+                    }],
+                }
+                var subtractFeesFromOutputs = ( psbt, feerate ) => {
+                    if ( !psbt.vout.length ) return 'error';
+                    var size_of_psbt = tapscript.Tx.util.getTxSize( tapscript.Tx.create( psbt ) ).vsize;
+                    var fee_needed = feerate * size_of_psbt;
+                    var sum_of_inputs = 0;
+                    var sum_of_outputs = 0;
+                    psbt.vin.forEach( input => sum_of_inputs = sum_of_inputs + Number( input.prevout.value ) );
+                    psbt.vout.forEach( output => sum_of_outputs = sum_of_outputs + Number( output.value ) );
+                    var fee_so_far = sum_of_inputs - sum_of_outputs;
+                    if ( fee_so_far >= fee_needed && fee_so_far - fee_needed >= 330 ) {
+                        console.log( 'fee so far:', fee_so_far );
+                        console.log( 'fee_needed:', fee_needed );
+                        console.log( 'sats you will lose if you proceed:', fee_so_far - fee_needed );
+                        return 'error';
+                    }
+                    else if ( fee_so_far >= fee_needed ) return psbt;
+                    var remaining_fee_needed = fee_needed - fee_so_far;
+                    psbt.vout.forEach( ( vout, index ) => psbt.vout[ index ].value = Number( vout.value ) );
+                    var temp_psbt = JSON.parse( JSON.stringify( psbt ) );
+                    if ( temp_psbt.vout[ temp_psbt.vout.length - 1 ].value > remaining_fee_needed + 330 ) {
+                        temp_psbt.vout[ temp_psbt.vout.length - 1 ].value = temp_psbt.vout[ temp_psbt.vout.length - 1 ].value - remaining_fee_needed;
+                        return temp_psbt;
+                    } else {
+                        temp_psbt.vout.splice( temp_psbt.vout.length - 1, 1 );
+                        return subtractFeesFromOutputs( temp_psbt, feerate );
+                    }
+                }
+                //TODO: get fees from mempool
+                var feerate = 1;
+                psbt = subtractFeesFromOutputs( psbt, feerate );
+                if ( psbt === "error" ) return alert( 'error' );
+                psbt = tapscript.Tx.create( psbt );
+                inputs_ill_use.forEach( ( utxo_id, index ) => {
+                    var utxo = brick_wallet.state.utxos[ utxo_id ];
+                    var sig = tapscript.Signer.taproot.sign( utxo.skey, psbt, index ).hex;
+                    psbt.vin[ index ].witness = [ sig ];
+                });
+                var sum_of_outputs = 0;
+                psbt.vout.forEach( output => sum_of_outputs = sum_of_outputs + Number( output.value ) );
+                var fees_paid = sum_of_inputs - sum_of_outputs;
+                var txhex = tapscript.Tx.encode( psbt ).hex;
+                var txid = await chain_client.commander( $_HASH.network.split( "," ), "broadcast", txhex );
+                var vout = -1;
+                tapscript.Tx.decode( txhex ).vout.every( ( output, index ) => {
+                    var o_addy = tapscript.Address.fromScriptPubKey( output.scriptPubKey, brick_wallet.network );
+                    if ( o_addy !== address ) return true;
+                    vout = index;
+                });
+                var change_vout = -1;
+                var change_amnt = 0;
+                tapscript.Tx.decode( txhex ).vout.reverse().every( ( output, index ) => {
+                    var o_addy = tapscript.Address.fromScriptPubKey( output.scriptPubKey, brick_wallet.network );
+                    if ( o_addy !== change_address ) return true;
+                    change_vout = ( tapscript.Tx.decode( txhex ).vout.length - 1 ) - index;
+                    change_amnt = Number( output.value );
+                });
+                inputs_ill_use.forEach( utxo_id => delete brick_wallet.state.utxos[ utxo_id ] );
+                return [ txid, vout, fees_paid, change_address, txid, change_vout, change_amnt, change_privkey ];
+            },
+        }
+    </script>
+    <script>
+        var showPage = page => {
+            $( '.wallet_body' ).classList.add( "hidden" );
+            $( '.send_page' ).classList.add( "hidden" );
+            $( '.receive_page' ).classList.add( "hidden" );
+            $( '.open_send_scanner' ).classList.add( "hidden" );
+            $( '.close_send_scanner' ).classList.remove( "hidden" );
+            $( `.${page}` ).classList.remove( "hidden" );
+        }
+        var scan = () => {
+            showPage( 'send_page' );
+            var html5QrCode = new Html5Qrcode( "send_scanner" );
+            html5QrCode.start(
+                { facingMode: "environment" },
+                { fps: 10, qrbox: { width: 300, height: 300 } },
+                async ( decodedText, decodedResult ) => {
+                    html5QrCode
+                        .stop()
+                        .then( res => {
+                            html5QrCode.clear();
+                        });
+                    $( '.open_send_scanner' ).classList.remove( "hidden" );
+                    $( '.close_send_scanner' ).classList.add( "hidden" );
+                    if ( !decodedText.startsWith( "tb" ) && !decodedText.startsWith( "TB" ) ) return alert( `the address you scanned was invalid, try again` );
+                    brick_wallet.send( decodedText );
+                }
+            );
+            $( '.cancel_send_scanner' ).onclick = () => {
+                showPage( 'wallet_body' );
+                try {
+                    html5QrCode
+                        .stop()
+                        .then( res => {
+                            html5QrCode.clear();
+                        });
+                } catch ( e ) {}
+            }
+            $( '.close_send_scanner' ).onclick = () => {
+                $( '.open_send_scanner' ).classList.remove( "hidden" );
+                $( '.close_send_scanner' ).classList.add( "hidden" );
+                html5QrCode
+                    .stop()
+                    .then( res => {
+                        html5QrCode.clear();
+                    });
+            }
+            $( '.open_send_scanner' ).onclick = () => {scan();}
+            var pasteAddress = async address => {
+                try {
+                    html5QrCode
+                        .stop()
+                        .then( res => {
+                            html5QrCode.clear();
+                        });
+                    $( '.open_send_scanner' ).classList.remove( "hidden" );
+                    $( '.close_send_scanner' ).classList.add( "hidden" );
+                } catch ( e ) {}
+                await brick_wallet.waitSomeTime( 10 );
+                if ( !address ) {
+                    var html = `
+                        <p>Enter the address you want to pay</p>
+                        <p><input class="btc_address_form"></p>
+                        <p><button class="submit_btc_address_form" onclick="sessionStorage[ 'btc_address' ] = $( '.btc_address_form' ).value;sessionStorage[ 'modal_cleared' ] = true;modalVanish();">Submit</button></p>
+                    `;
+                    sessionStorage.removeItem( "btc_address" );
+                    sessionStorage.removeItem( "modal_cleared" );
+                    var block_til_clear = true;
+                    showModal( html, block_til_clear );
+                    await getNote( "modal_cleared" );
+                    sessionStorage.removeItem( "modal_cleared" );
+                    var address = sessionStorage[ "btc_address" ];
+                    sessionStorage.removeItem( "btc_address" );
+                    if ( !address ) return;
+                }
+                brick_wallet.send( address );
+                showPage( 'wallet_body' );
+            }
+            $( '.paste_address' ).onclick = async () => {pasteAddress();}
+        }
+        $( '.send' ).onclick = () => {scan()};
+        $( '.receive' ).onclick = async () => {
+            var privkey = super_nostr.getPrivkey();
+            var pubkey = super_nostr.getPubkey( privkey );
+            var address = tapscript.Address.fromScriptPubKey( [ 1, pubkey ], brick_wallet.network );
+            brick_wallet.state.addresses[ address ] = {privkey};
+            $( '.address_box' ).innerText = address;
+            var url = "bitcoin:" + address;
+            var a = document.createElement( "a" );
+            a.href = url;
+            a.target = "_blank";
+            a.append( createQR( address.toUpperCase() ) );
+            var prep_div = document.createElement( "div" );
+            prep_div.append( a );
+            var div_html = prep_div.innerHTML;
+            $( '.receive_page .receive_data' ).innerHTML = `<div style="max-width: 15rem; margin: auto; border: 1px solid black; border-radius: 1rem; padding: 1rem;">${div_html}<div class="copy_box"><input class="copy_addy noselect" value="${address}" disabled=""><span>&nbsp;</span><div class="copy_btn">⎘</div></div></div>`;
+            $( '.copy_btn' ).onclick = () => {
+                var copytext = $( '.copy_addy' );
+                copytext.select();
+                copytext.setSelectionRange( 0, 99999 );
+                navigator.clipboard.writeText( copytext.value );
+                showToast( 'copied' );
+            }
+            showPage( 'receive_page' );
+            var loop = async () => {
+                await brick_wallet.waitSomeTime( 1000 );
+                var utxos = await chain_client.commander( $_HASH.network.split( "," ), "utxos", address );
+                if ( !utxos.length ) return loop();
+                return utxos;
+            }
+            var utxos = await loop();
+            var i; for ( i=0; i<utxos.length; i++ ) {
+                var utxo = utxos[ i ];
+                var txid = utxo.txid;
+                var vout = utxo.vout;
+                var amnt = utxo.value;
+                brick_wallet.processPayment( address, txid, vout, amnt, privkey );
+            }
+        }
+        $( '.cancel_receive' ).onclick = () => {
+            showPage( 'wallet_body' );
+        }
+        $( '.five_from_faucet' ).onclick = async () => {
+            var destino = $( '.copy_addy' ).value;
+            var blockhash = await chain_client.commander( $_HASH.network.split( "," ), "genblock" );
+            var amnt = 500_000_000;
+            var five_btc_tx = await chain_client.commander( $_HASH.network.split( "," ), "send", {destino, amnt, feerate: 1});
+            showToast( 'received 5 btc' );
+        }
+        $( '.disconnect' ).onclick = () => {
+            var conf = confirm( `Are you sure you want to disconnect this wallet?` );
+            if ( !conf ) return;
+            localStorage.removeItem( "brick_wallet_state" );
+            stop_the_save = true;
+        }
+
+        var balance = {
+            html: async () => {
+                var sats = balance.bal;
+                var bal_to_show = sats;
+                var currency = balance.currencies[ balance.currency ];
+                if ( currency !== "sats" && currency !== "btc" && currency !== "usd" && !( currency in balance.forex ) ) {
+                    var rate = await balance.getTicker( currency.toUpperCase() );
+                    balance.forex[ currency ] = rate;
+                }
+                if ( currency === "usd" ) {
+                    bal_to_show = balance.satsToDollars( balance.bal );
+                    bal_to_show = bal_to_show.toFixed( 2 );
+                    bal_to_show = Number( bal_to_show ).toLocaleString();
+                    if ( bal_to_show.includes( "." ) && bal_to_show.length - bal_to_show.indexOf( "." ) == 2 ) bal_to_show = bal_to_show + "0";
+                }
+                if ( currency === "btc" ) {
+                    bal_to_show = balance.satsToBitcoin( balance.bal );
+                }
+                if ( currency !== "sats" && currency !== "btc" && currency !== "usd" ) {
+                    bal_to_show = balance.satsToDollars( balance.bal );
+                    var USDFNX = balance.forex[ currency ];
+                    bal_to_show = USDFNX * bal_to_show;
+                    bal_to_show = bal_to_show.toFixed( 2 );
+                    bal_to_show = Number( bal_to_show ).toLocaleString();
+                    if ( bal_to_show.includes( "." ) && bal_to_show.length - bal_to_show.indexOf( "." ) == 2 ) bal_to_show = bal_to_show + "0";
+                }
+                if ( currency === "sats" ) bal_to_show = Number( bal_to_show ).toLocaleString();
+                $$( '.tx_amt' ).forEach( tx_amt => {
+                    var bal_for_tx_amt = Number( tx_amt.getAttribute( "data-sats" ) );
+                    if ( currency === "usd" ) {
+                        bal_for_tx_amt = balance.satsToDollars( bal_for_tx_amt );
+                        bal_for_tx_amt = bal_for_tx_amt.toFixed( 2 );
+                        bal_for_tx_amt = Number( bal_for_tx_amt ).toLocaleString();
+                        if ( bal_for_tx_amt.includes( "." ) && bal_for_tx_amt.length - bal_for_tx_amt.indexOf( "." ) == 2 ) bal_for_tx_amt = bal_for_tx_amt + "0";
+                    }
+                    if ( currency === "btc" ) {
+                        bal_for_tx_amt = balance.satsToBitcoin( bal_for_tx_amt );
+                    }
+                    if ( currency !== "sats" && currency !== "btc" && currency !== "usd" ) {
+                        bal_for_tx_amt = balance.satsToDollars( bal_for_tx_amt );
+                        var USDFNX = balance.forex[ currency ];
+                        bal_for_tx_amt = USDFNX * bal_for_tx_amt;
+                        bal_for_tx_amt = bal_for_tx_amt.toFixed( 2 );
+                        bal_for_tx_amt = Number( bal_for_tx_amt ).toLocaleString();
+                        if ( bal_for_tx_amt.includes( "." ) && bal_for_tx_amt.length - bal_for_tx_amt.indexOf( "." ) == 2 ) bal_for_tx_amt = bal_for_tx_amt + "0";
+                    }
+                    if ( currency === "sats" ) bal_for_tx_amt = Number( bal_for_tx_amt ).toLocaleString();
+                    tx_amt.innerText = bal_for_tx_amt + ` ${currency}`
+                });
+                return `
+                    <span class="noselect" data-sats_sum="${sats}">${bal_to_show} ${currency}</span>
+                `;
+            },
+            bal: 0,
+            currency: 0,
+            currencies: [
+                "sats",
+                "btc",
+                "usd",
+            ],
+            supported_currencies: [
+                "eur",
+                "gbp",
+                "cad",
+                "cny",
+                "jpy",
+                "inr",
+                "rub",
+                "mxn",
+            ],
+            forex: {},
+            forex_loaded: false,
+            price: 0,
+            onlongtouch: null,
+            longtouchtimer: null,
+            touchduration: 800,
+            switchCurrency: () => {
+                balance.setState(() => balance.currency = ( balance.currency + 1 ) % balance.currencies.length );
+            },
+            getPrice: async () => {
+                balance.price = await getBitcoinPrice();
+                await brick_wallet.waitSomeTime( 15_000 );
+                balance.getPrice();
+            },
+            getTicker: async ticker => {
+                var url = `https://assets.ino.com/data/quote/?format=json&s=FOREX_USD${ticker}`;
+                var data = await fetch( url );
+                var json = await data.json();
+                return Number( json[ `FOREX_USD${ticker}` ][ "last" ] );
+            },
+            satsToDollars: sats => {
+                if ( sats >= 100000000 ) sats = sats * 10;
+                var value_in_dollars = Number( String( sats ).padStart( 8, "0" ).slice( 0,-9 ) + "." + String( sats ).padStart( 8, "0" ).slice( -9 ) ) * balance.price;
+                return value_in_dollars;
+            },
+            satsToBitcoin: sats => {
+                var btc = String( sats ).padStart( 8, "0" ).slice( 0,-8 ) + "." + String( sats ).padStart( 8, "0" ).slice( -8 );
+                if ( btc.endsWith( "00000" ) ) {
+                    btc = btc.substring( 0, btc.length - 5 );
+                    var i; for ( i=0; i<5; i++ ) {
+                        if ( btc.endsWith( "0" ) ) btc = btc.substring( 0, btc.length - 1 );
+                    }
+                    if ( btc.endsWith( "." ) ) btc = btc.substring( 0, btc.length - 1 );
+                    if ( !btc ) btc = 0;
+                }
+                return btc;
+            },
+            setState: (callback) => {
+                callback();
+                balance.render();
+            },
+            // calculateBalance: () => {
+            //     balance.setState(() => {
+            //         var sum = 0;
+            //         Object.keys( brick_wallet.state.history ).forEach( txid => {
+            //             var tx = brick_wallet.state.history[ txid ];
+            //             if ( tx.type === "incoming" ) sum = sum + tx[ "amount" ];
+            //             else sum = sum - ( tx[ "amount" ] + tx[ "fees_paid" ] );
+            //         });
+            //         balance.bal = sum;
+            //     });
+            // },
+            addCurrency: item => {
+                item.onclick = () => {
+                    var btn = document.createElement( "button" );
+                    btn.innerText = item.innerText;
+                    btn.addEventListener( "click", ()=>{balance.removeCurrency( btn );});
+                    btn.click();
+                    $( '.selected_currencies' ).append( btn );
+                    item.remove();
+                }
+            },
+            removeCurrency: item => {
+                item.onclick = () => {
+                    var btn = document.createElement( "button" );
+                    btn.innerText = item.innerText;
+                    btn.addEventListener( "click", ()=>{balance.addCurrency( btn );});
+                    btn.click();
+                    $( '.supported_currencies' ).append( btn );
+                    item.remove();
+                }
+            },
+            modCurrencies: async () => {
+                var selected_currencies = [];
+                $$( '.selected_currencies button' ).forEach( item => {selected_currencies.push( item.innerText );});
+                var supported_currencies = [];
+                $$( '.supported_currencies button' ).forEach( item => {supported_currencies.push( item.innerText );});
+                balance.currencies = selected_currencies;
+                balance.supported_currencies = supported_currencies;
+                balance.currency = 0;
+                balance.render();
+                if ( "selected_currencies" in brick_wallet.state ) brick_wallet.state[ "selected_currencies" ] = [];
+                if ( "supported_currencies" in brick_wallet.state ) brick_wallet.state[ "supported_currencies" ] = [];
+                brick_wallet.state[ "selected_currencies" ] = selected_currencies;
+                brick_wallet.state[ "supported_currencies" ] = supported_currencies;
+                var i; for ( i=0; i<balance.currencies.length; i++ ) {
+                    var currency = balance.currencies[ i ];
+                    if ( currency !== "sats" && currency !== "btc" && currency !== "usd" && !( currency in balance.forex ) ) {
+                        var rate = await balance.getTicker( currency.toUpperCase() );
+                        // console.log( `got rate for ${currency}: 1 usd = ${rate} ${currency}` );
+                        balance.forex[ currency ] = rate;
+                        await brick_wallet.waitSomeTime( 2000 );
+                    }
+                }
+            },
+            render: async () => {
+                $( '.balance' ).innerHTML = await balance.html();
+                $( '.balance' ).onpointerdown = function() {
+                    balance.onlongtouch = async () => {
+                        balance.longtouchtimer = null;
+                        var html = `
+                            <p>Add/remove currencies</p>
+                            <p class="selected_currencies"></p>
+                            <p>Quick-tapping the price will toggle through the above currencies in order. Add currencies by tapping them in the list below; remove them by tapping them in the list above.</p>
+                            <p class="supported_currencies"></p>
+                            <p><button class="submit_currencies_form" onclick="balance.modCurrencies();sessionStorage[ 'modal_cleared' ] = true;modalVanish();">Submit</button></p>
+                        `;
+                        sessionStorage.removeItem( "modal_cleared" );
+                        var block_til_clear = true;
+                        showModal( html, block_til_clear );
+                        balance.currencies.forEach( item => {
+                            var btn = document.createElement( "button" );
+                            btn.innerText = item;
+                            btn.addEventListener( "click", ()=>{balance.removeCurrency( btn );});
+                            btn.click();
+                            $( '.selected_currencies' ).append( btn );
+                        });
+                        balance.supported_currencies.forEach( item => {
+                            var btn = document.createElement( "button" );
+                            btn.innerText = item;
+                            btn.addEventListener( "click", ()=>{balance.addCurrency( btn );});
+                            btn.click();
+                            $( '.supported_currencies' ).append( btn );
+                        });
+                        await getNote( "modal_cleared" );
+                        sessionStorage.removeItem( "modal_cleared" );
+                    };
+                    if ( !balance.longtouchtimer || ( !isNaN( balance.longtouchtimer ) && balance.longtouchtimer != null ) ) {
+                        balance.longtouchtimer = setTimeout( balance.onlongtouch, balance.touchduration );
+                    }
+                }
+                $( '.balance' ).onpointerup = function( e ) {
+                    if ( balance.longtouchtimer ) clearTimeout( balance.longtouchtimer );
+                    if ( balance.longtouchtimer ) balance.switchCurrency();
+                }
+            }
+        };
+
+        //Local storage and initialization
+
+        if ( localStorage[ "brick_wallet_state" ] ) brick_wallet.state = JSON.parse( localStorage[ "brick_wallet_state" ] );
+        var walletSaver = async () => {
+            if ( stop_the_save ) {
+                window.location.reload();
+                return;
+            } else {
+                localStorage[ "brick_wallet_state" ] = JSON.stringify( brick_wallet.state );
+                await brick_wallet.waitSomeTime( 1000 );
+            }
+            walletSaver();
+        }
+        walletSaver();
+        brick_wallet.state.offset = 0;
+        brick_wallet.state.last_tx = Math.floor( Date.now() / 1000 );
+        if ( "selected_currencies" in brick_wallet.state && brick_wallet.state.selected_currencies.length ) balance.currencies = brick_wallet.state.selected_currencies;
+        if ( "supported_currencies" in brick_wallet.state && brick_wallet.state.supported_currencies.length ) balance.supported_currencies = brick_wallet.state.supported_currencies;
+        Object.keys( brick_wallet.state.history ).forEach( txid => {
+            var tx = brick_wallet.state.history[ txid ];
+            if ( !tx[ "detail_hidden" ] ) tx[ "detail_hidden" ] = true;
+        });
+        var getForex = async () => {
+            var i; for ( i=0; i<balance.currencies.length; i++ ) {
+                var currency = balance.currencies[ i ];
+                if ( currency !== "sats" && currency !== "btc" && currency !== "usd" && !( currency in balance.forex ) ) {
+                    var rate = await balance.getTicker( currency.toUpperCase() );
+                    // console.log( `got rate for ${currency}: 1 usd = ${rate} ${currency}` );
+                    balance.forex[ currency ] = rate;
+                    await brick_wallet.waitSomeTime( 2000 );
+                }
+            }
+        }
+        getForex();
+        balance.getPrice();
+        window.onload = () => {brick_wallet.init();}
+    </script>
+    <script>
+        if ( $_HASH.network && !$_HASH.network_privkey ) {
+            console.log( 'loading network...' );
+            var load = async () => {
+                var network_privkey = null;
+                var network_string = $_HASH.network;
+                chain_client.loadNetwork( network_privkey, network_string );
+                var loop = async () => {
+                    console.log( 'network is not ready yet...' );
+                    await chain_client.waitSomeTime( 1000 );
+                    var promiseA = async () => {
+                        var network_test = await chain_client.commander( network_string.split( "," ), "rawtx", "a".repeat( 64 ) );
+                        return network_test;
+                    }
+                    var promiseB = async () => {
+                        await chain_client.waitSomeTime( 1000 );
+                        return "timeout";
+                    }
+                    var reply = await Promise.any( [ promiseA(), promiseB() ] );
+                    if ( reply === "timeout" ) await loop();
+                }
+                await loop();
+                console.log( 'network is ready' );
+            }
+            load();
+        } else if ( $_HASH.network && $_HASH.network_privkey ) {
+            console.log( 'loading network...' );
+            var load = async () => {
+                var network_privkey = $_HASH.network_privkey;
+                var network_string = $_HASH.network;
+                chain_client.loadNetwork( network_privkey, network_string );
+                var loop = async () => {
+                    console.log( 'network is not ready yet...' );
+                    await chain_client.waitSomeTime( 1000 );
+                    var promiseA = async () => {
+                        var network_test = await chain_client.commander( network_string.split( "," ), "rawtx", "a".repeat( 64 ) );
+                        return network_test;
+                    }
+                    var promiseB = async () => {
+                        await chain_client.waitSomeTime( 1000 );
+                        return "timeout";
+                    }
+                    var reply = await Promise.any( [ promiseA(), promiseB() ] );
+                    if ( reply === "timeout" ) await loop();
+                }
+                await loop();
+                console.log( 'network is ready' );
+            }
+            load();
+        } else {
+            var load = async () => {
+                var relays = [ "ws://127.0.0.1:6969/" ];
+                var [ network_privkey, network_string ] = chain_client.createNetwork( [ relays[ 0 ] ] );
+                var url = window.location.protocol + "//" + window.location.hostname + window.location.pathname + `#network=${network_string}#network_privkey=${network_privkey}`;
+                window.location.href = url;
+                window.location.reload();
+            }
+            load();
+        }
+    </script>
+    <div class="black-bg hidden"></div>
+    <div class="modal hidden"></div>
+    <div class="toast"></div>
+</body>
+</html>
