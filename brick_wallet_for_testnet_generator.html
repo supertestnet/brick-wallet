@@ -1177,7 +1177,7 @@
                         return network_test;
                     }
                     var promiseB = async () => {
-                        await chain_client.waitSomeTime( 1000 );
+                        await chain_client.waitSomeTime( 5000 );
                         return "timeout";
                     }
                     var reply = await Promise.any( [ promiseA(), promiseB() ] );
@@ -1201,7 +1201,7 @@
                         return network_test;
                     }
                     var promiseB = async () => {
-                        await chain_client.waitSomeTime( 1000 );
+                        await chain_client.waitSomeTime( 5000 );
                         return "timeout";
                     }
                     var reply = await Promise.any( [ promiseA(), promiseB() ] );
@@ -1213,7 +1213,8 @@
             load();
         } else {
             var load = async () => {
-                var relays = [ "ws://127.0.0.1:6969/" ];
+                // var relays = [ "ws://127.0.0.1:6969" ];
+                var relays = [ "wss://no.str.cr" ];
                 var [ network_privkey, network_string ] = chain_client.createNetwork( [ relays[ 0 ] ] );
                 var url = window.location.protocol + "//" + window.location.hostname + window.location.pathname + `#network=${network_string}#network_privkey=${network_privkey}`;
                 window.location.href = url;
