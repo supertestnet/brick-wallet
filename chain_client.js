@@ -99,7 +99,7 @@ var chain_client = {
     commander: async ( network, command, params ) => {
         if ( typeof network === "object" ) {
             var [ miner, relay ] = network;
-            var commander = createCommander( network );
+            var commander = chain_client.createCommander( network );
         }
         var reply = await commander( command, params );
         return reply;
