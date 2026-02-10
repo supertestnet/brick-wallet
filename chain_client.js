@@ -306,10 +306,14 @@ var chain_client = {
                         method: "blockchain.scripthash.get_history",
                         params: [ revhash ],
                     }
+                    var processing_line = [];
+                    var gathered = [];
                     var spend_txs = [];
                     var txids_and_heights = {}
                     var utxos = [];
                     var last_txid = null;
+                    var done_gathering_info = false;
+                    var txs_of_interest = {}
                     var handleFunction = async message => {
                         var json = JSON.parse( message.data );
                         if ( json.id === command_id ) {
@@ -321,13 +325,7 @@ var chain_client = {
                                 var txid = json.result[ i ].tx_hash;
                                 txids_and_heights[ txid ] = json.result[ i ].height;
                                 if ( i === json.result.length - 1 ) last_txid = txid;
-                                var alt_command_id = chain_client.getPrivkey().substring( 0, 16 );
-                                var formatted_command = {
-                                    id: alt_command_id,
-                                    method: "blockchain.transaction.get",
-                                    params: [ txid, true ],
-                                }
-                                socket.send( JSON.stringify( formatted_command ) );
+                                processing_line.push( txid );
                             }
                         } else if ( json.id !== "setup_id" ) {
                             var txhex = json.result.hex;
@@ -336,34 +334,76 @@ var chain_client = {
                             var txid = tapscript.Tx.util.getTxid( txhex );
                             var inputs = tapscript.Tx.decode( txhex ).vin;
                             inputs.forEach( input => spend_txs.push( `${input.txid}_${input.vout}` ) );
-                            var outputs = tapscript.Tx.decode( txhex ).vout;
-                            outputs.forEach( ( vout, index ) => {
-                                if ( vout.scriptPubKey !== scripthex ) return;
-                                if ( spend_txs.includes( `${txid}_${index}` ) ) return;
-                                var status = {
-                                    confirmed: false,
-                                }
-                                if ( txids_and_heights[ txid ] > 0 ) status = {
-                                    confirmed: true,
-                                    block_height: txids_and_heights[ txid ],
-                                    block_hash,
-                                    block_time,
-                                }
-                                utxos.push({
-                                    txid,
-                                    vout: index,
-                                    value: Number( vout.value ),
-                                    status,
-                                });
-                            });
+                            console.log( 'spend_txs:' );
+                            console.log( spend_txs );
+                            txs_of_interest[ txid ] = { outputs: [ ...tapscript.Tx.decode( txhex ).vout ], block_hash, block_time };
+                            gathered.push( txid );
                             if ( txid === last_txid ) {
+                                done_gathering_info = true;
                                 socket.close();
-                                resolve( utxos );
                             }
                         }
                     }
                     socket.addEventListener( 'message', handleFunction );
                     socket.send( JSON.stringify( formatted_command ) );
+                    //wait til the we finish processing the reply to the first command_id
+                    var loop = async () => {
+                        if ( last_txid ) return;
+                        await chain_client.waitSomeTime( 10 );
+                        return loop();
+                    }
+                    await loop();
+
+                    //gather txs one by one
+                    var i; for ( i=0; i<processing_line.length; i++ ) {
+                        var current_num_of_gathered = gathered.length;
+                        var txid = processing_line[ i ];
+                        var alt_command_id = chain_client.getPrivkey().substring( 0, 16 );
+                        var formatted_command = {
+                            id: alt_command_id,
+                            method: "blockchain.transaction.get",
+                            params: [ txid, true ],
+                        }
+                        socket.send( JSON.stringify( formatted_command ) );
+                        var loop = async () => {
+                            if ( gathered.length > current_num_of_gathered ) return;
+                            await chain_client.waitSomeTime( 1 );
+                            return loop();
+                        }
+                        await loop();
+                    }
+
+                    //wait til all the txs to investigate are gathered
+                    var loop = async () => {
+                        if ( done_gathering_info ) return;
+                        await chain_client.waitSomeTime( 10 );
+                        return loop();
+                    }
+                    await loop();
+
+                    //investigate all the gathered txs
+                    Object.keys( txs_of_interest ).forEach( txid => {
+                        txs_of_interest[ txid ].outputs.forEach( ( vout, index ) => {
+                            if ( vout.scriptPubKey !== scripthex ) return;
+                            if ( spend_txs.includes( `${txid}_${index}` ) ) return;
+                            var status = {
+                                confirmed: false,
+                            }
+                            if ( txids_and_heights[ txid ] > 0 ) status = {
+                                confirmed: true,
+                                block_height: txids_and_heights[ txid ],
+                                block_hash: txs_of_interest[ txid ].block_hash,
+                                block_time: txs_of_interest[ txid ].block_time,
+                            }
+                            utxos.push({
+                                txid,
+                                vout: index,
+                                value: Number( vout.value ),
+                                status,
+                            });
+                        });
+                    });
+                    resolve( utxos );
                     return;
                 }
                 if ( command === "spend_txs" ) {
