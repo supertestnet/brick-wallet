@@ -7,6 +7,8 @@ var chain_client = {
     most_recent_fulfilled_command: null,
     // base_url: `https://supertestnet.github.io/testnet_generator/`,
     base_url: `file:///home/supertestnet/bitcoin_projects/testnet_generator/testnet_generator.html`,
+    private_url: null,
+    public_url: null,
     main_connection: null,
     getPrivkey: () => window.crypto.getRandomValues( new Uint8Array( 32 ) ).toHex(),
     getPubkey: privkey => nobleSecp256k1.getPublicKey( privkey, true ).substring( 2 ),
@@ -25,9 +27,10 @@ var chain_client = {
         var arr = await crypto.subtle.digest( 'SHA-256', s );
         return chain_client.bytesToHex( new Uint8Array( arr ) );
     },
-    getNetworkUrl: ( privkey, relays ) => {
+    getNetworkUrl: ( privkey_or_pubkey, relays, is_public_key = true ) => {
         var hex_relays = chain_client.textToHex( JSON.stringify( relays ) );
-        return `${chain_client.base_url}#privkey=${privkey}#relays=${hex_relays}`;
+        if ( is_public_key ) return `${chain_client.base_url}#pubkey=${privkey_or_pubkey}#relays=${hex_relays}`;
+        return `${chain_client.base_url}#privkey=${privkey_or_pubkey}#relays=${hex_relays}`;
     },
     createNetwork: async relays => {
         return new Promise( async resolve => {
@@ -57,7 +60,12 @@ var chain_client = {
                 var [ type, subId, event ] = JSON.parse( message.data );
                 if ( !event || event === true ) return;
                 chain_client.connection_info = [ privkey, network_string ];
-                resolve( [ privkey, network_string ] );
+                var pubkey = chain_client.getPubkey( privkey );
+                var public_url = chain_client.getNetworkUrl( pubkey, relays, true );
+                var private_url = chain_client.getNetworkUrl( privkey, relays, false );
+                chain_client.public_url = public_url;
+                chain_client.private_url = private_url;
+                resolve( [ privkey, network_string, public_url, private_url ] );
             }
             var connection_id = await super_nostr.newPermanentConnection( relays[ 0 ], listenFunction, handleFunction );
             chain_client.main_connection = connection_id;
@@ -90,13 +98,37 @@ var chain_client = {
             document.body.append( iframe );
 
             //return info when testnet is ready for commands
+            var loop_limit = 8;
             var loop = async () => {
-                var commander = chain_client.createCommander( network_string.split( "," ) );
-                var test = await commander( "rawtx", "a".repeat( 64 ) );
-                if ( test === "tx not found" && privkey ) return resolve( [ privkey, network_string ] );
-                if ( test === "tx not found" ) return resolve( [ null, network_string ] );
-                await chain_client.waitSomeTime( 1_000 );
-                loop();
+                if ( loop_limit < 1 ) return;
+                var promiseA = async () => {
+                    var commander = chain_client.createCommander( network_string.split( "," ) );
+                    var test = await commander( "rawtx", "a".repeat( 64 ) );
+                    if ( test === "tx not found" && privkey ) {
+                        var pubkey = chain_client.getPubkey( privkey );
+                        var public_url = chain_client.getNetworkUrl( pubkey, relays, true );
+                        var private_url = chain_client.getNetworkUrl( privkey, relays, false );
+                        chain_client.public_url = public_url;
+                        chain_client.private_url = private_url;
+                        return resolve( [ privkey, network_string, public_url, private_url ] );
+                    }
+                    if ( test === "tx not found" ) {
+                        var publkey = network_string.split( "," )[ 0 ];
+                        var public_url = chain_client.getNetworkUrl( pubkey, relays, true );
+                        chain_client.public_url = public_url;
+                        return resolve( [ null, network_string, public_url ] );
+                    }
+                }
+                var promiseB = async () => {
+                    await chain_client.waitSomeTime( 1_000 );
+                    return "timeout";
+                }
+                var reply = await Promise.any( [ promiseA(), promiseB() ] );
+                if ( reply === "timeout" ) {
+                    loop_limit = loop_limit - 1;
+                    return await loop();
+                }
+                return true;
             }
             await loop();
         });
