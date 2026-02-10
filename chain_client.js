@@ -186,8 +186,9 @@ var chain_client = {
                     return loop();
                 }
                 await loop();
+                var setup_id = chain_client.getPrivkey().substring( 0, 16 );
                 var formatted_command = {
-                    id: "setup_id",
+                    id: setup_id,
                     method: "server.version",
                     params: [ "", "1.6" ],
                 }
@@ -235,7 +236,7 @@ var chain_client = {
                                 params: [],
                             }
                             socket.send( JSON.stringify( formatted_command ) );
-                        } else if ( json.id !== "setup_id" ) {
+                        } else if ( json.id !== setup_id ) {
                             socket.close();
                             height = json.result.height;
                         }
@@ -327,15 +328,13 @@ var chain_client = {
                                 if ( i === json.result.length - 1 ) last_txid = txid;
                                 processing_line.push( txid );
                             }
-                        } else if ( json.id !== "setup_id" ) {
+                        } else if ( json.id !== setup_id ) {
                             var txhex = json.result.hex;
                             var block_hash = json.result.blockhash;
                             var block_time = json.result.blocktime;
                             var txid = tapscript.Tx.util.getTxid( txhex );
                             var inputs = tapscript.Tx.decode( txhex ).vin;
                             inputs.forEach( input => spend_txs.push( `${input.txid}_${input.vout}` ) );
-                            console.log( 'spend_txs:' );
-                            console.log( spend_txs );
                             txs_of_interest[ txid ] = { outputs: [ ...tapscript.Tx.decode( txhex ).vout ], block_hash, block_time };
                             gathered.push( txid );
                             if ( txid === last_txid ) {
@@ -422,7 +421,8 @@ var chain_client = {
                     var last_b_txid = null;
                     var handleFunction = async message => {
                         var json = JSON.parse( message.data );
-                        if ( json.id !== command_id ) {
+                        if ( json.id === setup_id ) return;
+                        if ( json.id === command_id ) {
                             if ( !json.result.length ) {
                                 resolve( [] );
                                 return;
@@ -461,12 +461,15 @@ var chain_client = {
                                 socket.send( JSON.stringify( formatted_command ) );
 
                                 //if we are investigating the input of the last a_tx, set the last b_tx
-                                if ( txid === last_a_txid && j === tx.vin.length - 1 ) last_b_txid = vin.txid;
+                                if ( txid === last_a_txid && j === tx.vin.length - 1 ) {
+                                    last_b_txid = vin.txid;
+                                }
                             }
                         } else if ( json.id.startsWith( "b_" ) ) {
                             //if we are in this section then we know this is a b_tx, that is, a tx that supposedly locked money to our address. We must check if the outputs references in the outpoints_and_inputs object actually locked money to our address; if they did, we can list add the string `${txid}_${j}` to spend_txs
                             var txhex = json.result;
                             var txid = tapscript.Tx.util.getTxid( txhex );
+                            console.log( 19, 'possible spend tx:', txid );
                             var outputs = tapscript.Tx.decode( txhex ).vout;
                             if ( !outpoints_and_inputs.hasOwnProperty( txid ) ) console.log( 'i was asked to check', txid, 'which does not exist in the object:', outpoints_and_inputs );
                             var outputs_we_are_interested_in = Object.keys( outpoints_and_inputs[ txid ] ).map( Number );
