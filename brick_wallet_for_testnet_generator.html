@@ -6,13 +6,17 @@
     <title>Brick Wallet</title>
     <link rel="shortcut icon" type="image/x-icon" href="https://supertestnet.github.io/brick-wallet/favicon.ico">
     <script src="https://cdn.jsdelivr.net/gh/mebjas/html5-qrcode@master/minified/html5-qrcode.min.js"></script>
-    <script src="https://supertestnet.github.io/brick-wallet/chain_client.js"></script>
+    <!-- <script src="https://supertestnet.github.io/brick-wallet/chain_client.js"></script> -->
+    <script src="file:///home/supertestnet/bitcoin_projects/testnet_generator/chain_client.js"></script>
     <script src="https://supertestnet.github.io/bitcoin-chess/js/qrcode.js"></script>
     <script src="https://supertestnet.github.io/bitcoin-chess/js/bolt11.js"></script>
-    <script src="https://supertestnet.github.io/bankify/super_nostr.js"></script>
-    <script src="https://unpkg.com/@cmdcode/tapscript@1.4.0"></script>
+    <!-- <script src="https://supertestnet.github.io/bankify/super_nostr.js"></script> -->
+    <script src="file:///home/supertestnet/bitcoin_projects/testnet_generator/super_nostr.js"></script>
+    <script src="file:///home/supertestnet/bitcoin_projects/testnet_generator/tapscript@1.5.3"></script>
+    <!-- <script src="https://unpkg.com/@cmdcode/tapscript@1.4.0"></script> -->
     <script src="https://bundle.run/browserify-cipher@1.0.1"></script>
-    <script src="https://bundle.run/noble-secp256k1@1.2.14"></script>
+    <script src="file:///home/supertestnet/bitcoin_projects/testnet_generator/noble-secp256k1@1.2.14"></script>
+    <!-- <script src="https://bundle.run/noble-secp256k1@1.2.14"></script> -->
     <script src="https://bundle.run/bech32@2.0.0"></script>
     <script>
         var modalVanish = () => {
@@ -32,6 +36,7 @@
             setTimeout( () => $( '.toast' ).classList.remove( "show" ), 3000 );
         }
         var createQR = content => {
+            return content;
             var dataUriPngImage = document.createElement( "img" ),
             s = QRCode.generatePNG( content, {
                 ecclevel: "M",
@@ -793,49 +798,49 @@
         }
         var scan = () => {
             showPage( 'send_page' );
-            var html5QrCode = new Html5Qrcode( "send_scanner" );
-            html5QrCode.start(
-                { facingMode: "environment" },
-                { fps: 10, qrbox: { width: 300, height: 300 } },
-                async ( decodedText, decodedResult ) => {
-                    html5QrCode
-                        .stop()
-                        .then( res => {
-                            html5QrCode.clear();
-                        });
-                    $( '.open_send_scanner' ).classList.remove( "hidden" );
-                    $( '.close_send_scanner' ).classList.add( "hidden" );
-                    if ( !decodedText.startsWith( "tb" ) && !decodedText.startsWith( "TB" ) ) return alert( `the address you scanned was invalid, try again` );
-                    brick_wallet.send( decodedText );
-                }
-            );
+            // var html5QrCode = new Html5Qrcode( "send_scanner" );
+            // html5QrCode.start(
+            //     { facingMode: "environment" },
+            //     { fps: 10, qrbox: { width: 300, height: 300 } },
+            //     async ( decodedText, decodedResult ) => {
+            //         html5QrCode
+            //             .stop()
+            //             .then( res => {
+            //                 html5QrCode.clear();
+            //             });
+            //         $( '.open_send_scanner' ).classList.remove( "hidden" );
+            //         $( '.close_send_scanner' ).classList.add( "hidden" );
+            //         if ( !decodedText.startsWith( "tb" ) && !decodedText.startsWith( "TB" ) ) return alert( `the address you scanned was invalid, try again` );
+            //         brick_wallet.send( decodedText );
+            //     }
+            // );
             $( '.cancel_send_scanner' ).onclick = () => {
                 showPage( 'wallet_body' );
-                try {
-                    html5QrCode
-                        .stop()
-                        .then( res => {
-                            html5QrCode.clear();
-                        });
-                } catch ( e ) {}
+                // try {
+                //     html5QrCode
+                //         .stop()
+                //         .then( res => {
+                //             html5QrCode.clear();
+                //         });
+                // } catch ( e ) {}
             }
             $( '.close_send_scanner' ).onclick = () => {
                 $( '.open_send_scanner' ).classList.remove( "hidden" );
                 $( '.close_send_scanner' ).classList.add( "hidden" );
-                html5QrCode
-                    .stop()
-                    .then( res => {
-                        html5QrCode.clear();
-                    });
+                // html5QrCode
+                //     .stop()
+                //     .then( res => {
+                //         html5QrCode.clear();
+                //     });
             }
             $( '.open_send_scanner' ).onclick = () => {scan();}
             var pasteAddress = async address => {
                 try {
-                    html5QrCode
-                        .stop()
-                        .then( res => {
-                            html5QrCode.clear();
-                        });
+                    // html5QrCode
+                    //     .stop()
+                    //     .then( res => {
+                    //         html5QrCode.clear();
+                    //     });
                     $( '.open_send_scanner' ).classList.remove( "hidden" );
                     $( '.close_send_scanner' ).classList.add( "hidden" );
                 } catch ( e ) {}
@@ -1213,9 +1218,9 @@
             load();
         } else {
             var load = async () => {
-                // var relays = [ "ws://127.0.0.1:6969" ];
-                var relays = [ "wss://no.str.cr" ];
-                var [ network_privkey, network_string ] = chain_client.createNetwork( [ relays[ 0 ] ] );
+                var relays = [ "ws://127.0.0.1:6969" ];
+                // var relays = [ "wss://no.str.cr" ];
+                var [ network_privkey, network_string ] = await chain_client.createNetwork( [ relays[ 0 ] ] );
                 var url = window.location.protocol + "//" + window.location.hostname + window.location.pathname + `#network=${network_string}#network_privkey=${network_privkey}`;
                 window.location.href = url;
                 window.location.reload();
