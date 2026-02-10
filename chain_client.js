@@ -279,13 +279,18 @@ var chain_client = {
                     }
                     var handleFunction = async message => {
                         var json = JSON.parse( message.data );
-                        if ( json.id === command_id ) return;
+                        if ( json.id !== command_id ) return;
                         if ( !json.result ) {
                             resolve( json.error.message );
                             return;
                         }
                         //TODO: consider whether to rework this; I suspect it will return whichever txid comes first when sorted alphabetically, whereas chain_client always returns the txid of the parent. But I think all of my current software just checks if the result is a 64 byte hex string as an indicator of success, so maybe that's fine
+                        if ( json.result.hasOwnProperty( "success" ) && json.result.success ) {
+                            resolve( chain_client.getPrivkey() );
+                            return;
+                        }
                         resolve( Object.keys( json.result.txs )[ 0 ] );
+                        return;
                     }
                     socket.addEventListener( 'message', handleFunction );
                     socket.send( JSON.stringify( formatted_command ) );
@@ -301,6 +306,7 @@ var chain_client = {
                         method: "blockchain.scripthash.get_history",
                         params: [ revhash ],
                     }
+                    var spend_txs = [];
                     var txids_and_heights = {}
                     var utxos = [];
                     var last_txid = null;
@@ -328,9 +334,12 @@ var chain_client = {
                             var block_hash = json.result.blockhash;
                             var block_time = json.result.blocktime;
                             var txid = tapscript.Tx.util.getTxid( txhex );
+                            var inputs = tapscript.Tx.decode( txhex ).vin;
+                            inputs.forEach( input => spend_txs.push( `${input.txid}_${input.vout}` ) );
                             var outputs = tapscript.Tx.decode( txhex ).vout;
                             outputs.forEach( ( vout, index ) => {
                                 if ( vout.scriptPubKey !== scripthex ) return;
+                                if ( spend_txs.includes( `${txid}_${index}` ) ) return;
                                 var status = {
                                     confirmed: false,
                                 }
@@ -354,9 +363,7 @@ var chain_client = {
                         }
                     }
                     socket.addEventListener( 'message', handleFunction );
-                    console.log( 'sending' );
                     socket.send( JSON.stringify( formatted_command ) );
-                    console.log( 'sent' );
                     return;
                 }
                 if ( command === "spend_txs" ) {
@@ -375,7 +382,7 @@ var chain_client = {
                     var last_b_txid = null;
                     var handleFunction = async message => {
                         var json = JSON.parse( message.data );
-                        if ( json.id === command_id ) {
+                        if ( json.id !== command_id ) {
                             if ( !json.result.length ) {
                                 resolve( [] );
                                 return;
